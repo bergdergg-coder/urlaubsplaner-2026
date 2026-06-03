@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   WÜRZBURGER GRUPPE — Design System
+   Markenrot #EE1C25 · ruhige, hochwertige, managementorientierte Optik
+   ========================================================================== */
+@theme {
+  /* Marke */
+  --color-ww-red: #ee1c25;
+  --color-ww-red-700: #b30f17;
+  --color-ww-red-600: #d11420;
+  --color-ww-red-100: #ffe3e4;
+  --color-ww-red-50: #fff5f5;
+
+  /* Neutrale Flächen */
+  --color-ink: #17171b;
+  --color-ink-soft: #3f3f46;
+  --color-muted: #6c6c76;
+  --color-faint: #9a9aa4;
+  --color-line: #e9e9ee;
+  --color-line-soft: #f1f1f4;
+  --color-canvas: #f5f5f7;
+  --color-card: #ffffff;
+
+  /* Status / Semantik (aus der Excel-Logik abgeleitet, modernisiert) */
+  --color-ok: #15924f;
+  --color-ok-bg: #e4f6ea;
+  --color-warn: #b8740a;
+  --color-warn-bg: #fef1d8;
+  --color-crit: #d11420;
+  --color-crit-bg: #fde3e4;
+  --color-info: #2563eb;
+  --color-info-bg: #e6effe;
+
+  /* Gesellschaftsakzente (tonal, ruhig) */
+  --color-wgv: #ee1c25;
+  --color-ag: #2f6f8f;
+  --color-gmbh: #1f8a70;
+
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --radius-card: 16px;
+  --shadow-card: 0 1px 2px rgba(16, 16, 20, 0.04), 0 8px 24px -12px rgba(16, 16, 20, 0.12);
+  --shadow-pop: 0 12px 40px -8px rgba(16, 16, 20, 0.22);
+}
+
+@layer base {
+  *, ::before, ::after { border-color: var(--color-line); }
+  :root { color-scheme: light; }
+  html, body, #root { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    color-scheme: light;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 { letter-spacing: -0.015em; }
+  ::selection { background: var(--color-ww-red-100); }
+
+  /* dezente, schlanke Scrollbalken — SaaS-Anmutung */
+  ::-webkit-scrollbar { height: 10px; width: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: #d5d5db; border-radius: 99px; border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #bcbcc6; background-clip: content-box; }
+}
+
+@layer components {
+  .card {
+    background: var(--color-card);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* Eleganter, ruhiger Fokusring */
+  .focusable:focus-visible {
+    outline: 2px solid var(--color-ww-red);
+    outline-offset: 2px;
+  }
+}
+
+/* sanftes Einblenden von Panels/Modals */
+@keyframes ww-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes ww-pop-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.anim-fade { animation: ww-fade-in .28s ease both; }
+.anim-pop { animation: ww-pop-in .2s ease both; }
+
+/* Barrierefreiheit: Bewegung reduzieren */
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade, .anim-pop { animation: none; }
+}
+
+/* ============================================================================
+   DRUCK — es wird nur der markierte Bereich (.print-target) gedruckt
+   ========================================================================== */
+@media print {
+  @page { size: A4 landscape; margin: 9mm; }
+  html, body { background: #fff !important; }
+  .no-print { display: none !important; }
+
+  /* alles ausblenden … */
+  body.printing * { visibility: hidden !important; }
+  /* … außer dem Zielbereich */
+  body.printing .print-target,
+  body.printing .print-target * { visibility: visible !important; }
+  body.printing .print-target {
+    position: absolute !important; left: 0; top: 0; width: 100%;
+    box-shadow: none !important; border: none !important;
+  }
+  /* Hintergrundfarben (Urlaubsbalken, Schattierungen, Farbrampe, Heatmap, Hero, KPIs) wirklich drucken */
+  body.printing .print-target,
+  body.printing .print-target * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Namensspalte/Kopfzeile entkleben, sonst überlappt der Ausdruck */
+  body.printing .print-target .sticky { position: static !important; }
+  /* Scrollbereiche im Druck vollständig auffalten */
+  body.printing .print-target .print-expand {
+    overflow: visible !important; width: auto !important; max-height: none !important;
+  }
+  /* Mitarbeiterzeilen und Gesellschaftsblöcke nicht über Seitenumbrüche zerschneiden */
+  body.printing .print-target .print-expand > div > div { break-inside: avoid; }
+}
