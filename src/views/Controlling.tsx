@@ -8,7 +8,8 @@ import { useData } from '../store/data'
 import { leaveAccount } from '../lib/leave'
 import { printElement } from '../lib/print'
 import type { CompanyId } from '../domain/types'
-import { yearDays, formatDE } from '../lib/dates'
+import { yearDays, formatDE, isWeekend } from '../lib/dates'
+import { isHoliday } from '../domain/holidays'
 
 export interface PlanTarget { month?: number; filter?: CompanyId | 'ALL'; mode?: Mode }
 
@@ -34,7 +35,13 @@ export function Controlling({ onOpenPlan }: {
       if (!employeeMap[a.employeeId]) continue
       const s = idx.get(a.start), e = idx.get(a.end)
       if (s == null || e == null) continue
-      for (let i = s; i <= e; i++) total[i]++
+      for (let i = s; i <= e; i++) {
+        // Arbeitsfreie Tage zählen nicht als Engpass (analog zur Urlaubsberechnung):
+        // Wochenende immer, Feiertage nur wenn in BEIDEN Regionen (DE/CH) frei.
+        const d = days[i]
+        if (isWeekend(d) || (isHoliday(d, 'BW') && isHoliday(d, 'CH'))) continue
+        total[i]++
+      }
     }
     return total
   }, [absences, days, idx, employeeMap])
@@ -69,10 +76,11 @@ export function Controlling({ onOpenPlan }: {
               <span className="inline-flex items-center justify-center bg-white rounded-xl h-14 w-14 shrink-0"><img src={logoUrl} className="h-8 w-auto" alt="Würzburger Gruppe" /></span>
               <div>
                 <h2 className="text-[26px] font-semibold tracking-tight leading-tight">Würzburger Gruppe 2026</h2>
-                <p className="text-[15px] text-white/90 mt-1">Urlaub im Überblick – alle drei Firmen</p>
+                <p className="text-[15px] text-white/90 mt-1">Urlaub im Überblick – alle drei Gesellschaften</p>
+                <p className="hidden print:block text-[11px] text-white/80 mt-1">Stand: {new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
               </div>
             </div>
-            <button onClick={() => printElement(ref.current)}
+            <button onClick={() => printElement(ref.current, 'portrait')}
               className="focusable no-print inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-white/15 hover:bg-white/25 text-white text-[15px] font-semibold backdrop-blur transition-colors">
               <Printer size={18} /> Drucken
             </button>
@@ -87,7 +95,7 @@ export function Controlling({ onOpenPlan }: {
               <Users size={20} className="text-[var(--color-ww-red)]" /> Mitarbeiter
             </div>
             <div className="mt-3 text-[44px] font-semibold leading-none tnum">{nf(employees.length)}</div>
-            <div className="mt-3 text-[14.5px] text-[var(--color-muted)]">in {COMPANIES.length} Firmen · Deutschland &amp; Schweiz</div>
+            <div className="mt-3 text-[14.5px] text-[var(--color-muted)]">in {COMPANIES.length} Gesellschaften · Deutschland &amp; Schweiz</div>
           </Card>
           <Card className="p-6">
             <div className="flex items-center gap-2 text-[15px] font-medium text-[var(--color-ink-soft)]">
@@ -100,7 +108,7 @@ export function Controlling({ onOpenPlan }: {
 
         {/* Die drei Firmen */}
         <Card className="p-6 mb-6">
-          <h3 className="text-[20px] font-semibold tracking-tight">Die drei Firmen</h3>
+          <h3 className="text-[20px] font-semibold tracking-tight">Die drei Gesellschaften</h3>
           <p className="text-[14.5px] text-[var(--color-muted)] mt-1 mb-4">Wie viel Urlaub ist schon genommen? Zum Öffnen anklicken.</p>
           <div className="space-y-3">
             {COMPANIES.map((c) => {

@@ -30,8 +30,7 @@ export interface Company {
 export type RoleLevel =
   | 'employee'           // Self-Service: nur eigene Abwesenheiten
   | 'company_manager'    // Freigaben + Sicht der eigenen Gesellschaft
-  | 'group_management'   // gruppenweite Management-Sicht (Wolfgang)
-  | 'admin'              // Konfiguration (Stammdaten, Regeln)
+  | 'admin'              // Konfiguration & gruppenweite Sicht (Stammdaten, Regeln)
 
 /** Funktionsgruppe — für Rollen-/Gruppen-Filter in Exporten und Auswertungen.
    (z. B. „nur Geschäftsführung & Kader nach Outlook exportieren".) */

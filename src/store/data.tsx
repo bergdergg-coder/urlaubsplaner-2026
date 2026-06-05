@@ -78,7 +78,18 @@ function loadStored(): { employees: Employee[]; absences: Absence[] } | null {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const d = JSON.parse(raw)
-    if (Array.isArray(d?.employees) && Array.isArray(d?.absences)) return d
+    if (!Array.isArray(d?.employees) || !Array.isArray(d?.absences)) return null
+    // Korrupte/unvollständige Einträge herausfiltern, damit mergeWithSeed und die
+    // Berechnungen nicht an Fremddaten abstürzen.
+    const employees = (d.employees as unknown[]).filter(
+      (e): e is Employee => !!e && typeof e === 'object' && typeof (e as Employee).id === 'string',
+    )
+    const absences = (d.absences as unknown[]).filter(
+      (a): a is Absence => !!a && typeof a === 'object'
+        && typeof (a as Absence).id === 'string' && typeof (a as Absence).employeeId === 'string'
+        && typeof (a as Absence).start === 'string' && typeof (a as Absence).end === 'string',
+    )
+    return { employees, absences }
   } catch { /* ignore */ }
   return null
 }
@@ -111,7 +122,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // bei jeder Änderung im Browser sichern
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, absences })) } catch { /* ignore */ }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees, absences })) }
+    catch (e) { console.warn('Speichern im Browser fehlgeschlagen – Änderungen gehen beim Neuladen verloren:', e) }
   }, [employees, absences])
 
   const employeeMap = useMemo(
@@ -154,34 +166,44 @@ export function DataProvider({ children }: { children: ReactNode }) {
     updateAbsence: (id, a) => {
       const existing = absences.find((x) => x.id === id)
       if (!existing || !canTouch(existing.employeeId)) return
+      // Mitarbeiter dürfen nur eigene, noch OFFENE Anträge ändern (nicht entschiedene).
+      if (isEmployee && existing.status !== 'requested') return
       const employeeId = isEmployee && selfEmployeeId ? selfEmployeeId : a.employeeId
       if (!canTouch(employeeId)) return
       const { start, end } = ordered(a.start, a.end)
       setAbsences((prev) => prev.map((x) => {
         if (x.id !== id) return x
-        const { halfDayStart: _drop, note: _dropNote, ...rest } = x
+        const { halfDayStart: _h, note: _n, decidedBy, decidedAt, ...rest } = x
         const status = isEmployee ? 'requested' : (a.status ?? x.status)
+        // Bearbeiter-/Datums-Spur nur behalten, wenn der Status entschieden bleibt;
+        // wird ein genehmigter Eintrag wieder zum Antrag, fällt sie weg.
+        const keepDecision = status !== 'requested' && status === x.status
         return {
           ...rest, employeeId, start, end, status,
           ...(a.halfDayStart ? { halfDayStart: true } : {}),
           ...(a.note?.trim() ? { note: a.note.trim() } : {}),
+          ...(keepDecision && decidedBy ? { decidedBy } : {}),
+          ...(keepDecision && decidedAt ? { decidedAt } : {}),
         }
       }))
     },
     removeAbsence: (id) => setAbsences((prev) => {
       const t = prev.find((a) => a.id === id)
-      if (t && !canTouch(t.employeeId)) return prev
+      if (!t) return prev
+      if (!canTouch(t.employeeId)) return prev
+      // Mitarbeiter dürfen nur eigene, noch offene Anträge zurückziehen.
+      if (isEmployee && t.status !== 'requested') return prev
       return prev.filter((a) => a.id !== id)
     }),
     approveAbsence: (id, decidedBy) => {
       if (!perms.approve) return
       setAbsences((prev) => prev.map((x) =>
-        x.id === id && canTouch(x.employeeId) ? { ...x, status: 'approved', decidedAt: TODAY, ...(decidedBy ? { decidedBy } : {}) } : x))
+        x.id === id && x.status === 'requested' && canTouch(x.employeeId) ? { ...x, status: 'approved', decidedAt: TODAY, ...(decidedBy ? { decidedBy } : {}) } : x))
     },
     rejectAbsence: (id, decidedBy) => {
       if (!perms.approve) return
       setAbsences((prev) => prev.map((x) =>
-        x.id === id && canTouch(x.employeeId) ? { ...x, status: 'rejected', decidedAt: TODAY, ...(decidedBy ? { decidedBy } : {}) } : x))
+        x.id === id && x.status === 'requested' && canTouch(x.employeeId) ? { ...x, status: 'rejected', decidedAt: TODAY, ...(decidedBy ? { decidedBy } : {}) } : x))
     },
     addEmployee: (e) => {
       if (!canManageCompany(e.companyId)) return

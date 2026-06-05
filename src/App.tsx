@@ -41,9 +41,11 @@ export default function App() {
     setPage('plan')
   }
 
-  // Ziel für „Urlaub eintragen/beantragen".
+  // Ziel für „Urlaub eintragen/beantragen": Mitarbeiter→sich selbst; Verwalter→
+  // bevorzugt jemand aus der aktuell gefilterten Gesellschaft, sonst erster im Scope.
   const firstScopeEmp = employees.find((e) => scopeCompanies.includes(e.companyId))
-  const newLeaveTarget = isEmployee ? selfEmployeeId : firstScopeEmp?.id
+  const filterEmp = (!isEmployee && filter !== 'ALL') ? employees.find((e) => e.companyId === filter) : undefined
+  const newLeaveTarget = isEmployee ? selfEmployeeId : (filterEmp?.id ?? firstScopeEmp?.id)
   function openNewLeave(employeeId: string) { setDraft({ employeeId, start: TODAY, end: TODAY }) }
 
   // Offene Anträge im eigenen Verantwortungsbereich (für Freigaben-Badge).
@@ -62,30 +64,31 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="no-print sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-[var(--color-line)] px-6 h-16 flex items-center gap-4">
-        <img src={logoUrl} alt="Würzburger" className="h-9 w-auto" />
-        <div className="hidden md:block leading-tight mr-2">
+      <header className="no-print sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-[var(--color-line)] px-3 sm:px-6 h-16 flex items-center gap-2 sm:gap-4">
+        <img src={logoUrl} alt="Würzburger" className="h-9 w-auto shrink-0" />
+        <div className="hidden xl:block leading-tight mr-2 shrink-0">
           <div className="text-[15px] font-semibold tracking-tight">Urlaubsplan 2026</div>
           <div className="text-[11.5px] text-[var(--color-muted)] -mt-0.5">Würzburger Gruppe</div>
         </div>
 
-        <nav aria-label="Ansicht" className="flex items-center gap-1 p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)]">
+        <nav aria-label="Ansicht" className="flex items-center gap-1 p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)] min-w-0 overflow-x-auto">
           {tabs.map((t) => (
             <button key={t.id} type="button" onClick={() => setPage(t.id)} aria-current={effPage === t.id ? 'page' : undefined}
-              className={`focusable inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
+              title={t.label}
+              className={`focusable inline-flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors shrink-0 ${
                 effPage === t.id ? 'bg-white shadow-sm text-[var(--color-ink)]' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'}`}>
-              {t.icon}<span className="hidden sm:inline">{t.label}</span>
+              {t.icon}<span className="hidden lg:inline">{t.label}</span>
               {t.badge ? <span className="text-[10px] font-semibold leading-none px-1.5 py-0.5 rounded-full bg-[var(--color-ww-red)] text-white tnum">{t.badge}</span> : null}
             </button>
           ))}
         </nav>
 
-        <div className="flex-1" />
+        <div className="flex-1 min-w-0" />
 
-        <div className="flex items-center gap-2 pr-1 border-r border-[var(--color-line)] mr-1">
-          <div className="hidden sm:block text-right leading-tight">
-            <div className="text-[12.5px] font-medium">{account.label}</div>
-            <div className="text-[11px] text-[var(--color-muted)]">{isAdmin ? 'Alle Gesellschaften' : account.sub}</div>
+        <div className="flex items-center gap-2 pr-1 border-r border-[var(--color-line)] mr-1 shrink-0">
+          <div className="hidden lg:block text-right leading-tight max-w-[200px]">
+            <div className="text-[12.5px] font-medium truncate">{account.label}</div>
+            <div className="text-[11px] text-[var(--color-muted)] truncate">{isAdmin ? 'Alle Gesellschaften' : account.sub}</div>
           </div>
           <button type="button" onClick={logout} title="Abmelden" aria-label="Abmelden"
             className="focusable p-2 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-line-soft)] hover:text-[var(--color-ink)]"><LogOut size={16} /></button>

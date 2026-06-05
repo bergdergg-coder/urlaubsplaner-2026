@@ -35,8 +35,10 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
   // gemäß dem individuellen Arbeitstagsmuster der Person).
   const days = workdaysInRange(lo, hi, regionOf(e), halfDay, workdaysOf(e))
   const acct = leaveAccount(e, absences)
-  // Verbleibend nach diesem Eintrag (Bearbeiten: grobe Vorschau auf Basis Rest).
-  const projectedRemaining = acct.remaining - (isEdit ? 0 : days)
+  // Vorschau auf Basis „verbleibend inkl. offener Anträge" (konsistent zur Anzeige
+  // unten). Beim Bearbeiten zählen die bisherigen Tage des Eintrags zuerst zurück.
+  const originalDays = isEdit ? workdaysInRange(draft.start, draft.end, regionOf(e), !!draft.halfDay, workdaysOf(e)) : 0
+  const projectedRemaining = acct.remainingIfApproved + originalDays - days
 
   function save() {
     const payload = { employeeId, start: lo, end: hi, halfDayStart: halfDay, status, note }
@@ -114,11 +116,13 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
 
         <div className="flex items-center justify-between gap-2 text-[12.5px] bg-[var(--color-canvas)] rounded-lg px-3 py-2">
           <span className="text-[var(--color-muted)]">{halfDay ? `${formatRangeDE(lo, lo)} · ½ Tag` : formatRangeDE(lo, hi)}</span>
-          <span className="tnum font-semibold text-[var(--color-ink)]">{days} Urlaubstag{days === 1 ? '' : 'e'}</span>
+          <span className="tnum font-semibold" style={{ color: days === 0 ? 'var(--color-warn)' : 'var(--color-ink)' }}>{days} Urlaubstag{days === 1 ? '' : 'e'}</span>
         </div>
-        {!isEdit && (
+        {days === 0 ? (
+          <div className="text-[11.5px] text-[var(--color-warn)] -mt-2 px-1">Im gewählten Zeitraum liegen keine Arbeitstage (nur Wochenende/Feiertage).</div>
+        ) : (
           <div className="text-[11.5px] text-[var(--color-muted)] -mt-2 px-1">
-            Resturlaub {e.name.split(' ')[0]}: {acct.remaining} → <span className={projectedRemaining < 0 ? 'text-[var(--color-crit)] font-semibold' : 'font-semibold text-[var(--color-ink-soft)]'}>{projectedRemaining}</span> Tage
+            Resturlaub {e.name.split(' ')[0]}: {acct.remainingIfApproved} → <span className={projectedRemaining < 0 ? 'text-[var(--color-crit)] font-semibold' : 'font-semibold text-[var(--color-ink-soft)]'}>{projectedRemaining}</span> Tage
             {acct.requested > 0 ? ` · ${acct.requested} bereits beantragt` : ''}
           </div>
         )}
@@ -134,7 +138,7 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="focusable h-10 px-4 rounded-lg text-[13px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-line-soft)]">Abbrechen</button>
-            <button onClick={save} disabled={!start || (!halfDay && !end)}
+            <button onClick={save} disabled={!start || (!halfDay && !end) || days === 0}
               className="focusable h-10 px-5 rounded-lg bg-[var(--color-ww-red)] text-white text-[13px] font-semibold hover:bg-[var(--color-ww-red-600)] disabled:opacity-40 disabled:cursor-not-allowed">
               {isEdit ? 'Speichern' : (status === 'requested' ? 'Antrag stellen' : 'Eintragen')}
             </button>

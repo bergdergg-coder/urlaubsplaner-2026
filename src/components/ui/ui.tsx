@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { X } from 'lucide-react'
 import logoUrl from '../../assets/logo.png'
 import type { AbsenceStatus, Company, Country, Employee } from '../../domain/types'
@@ -85,20 +85,43 @@ export function Meter({ value, max, color = 'var(--color-ww-red)' }: { value: nu
 export function Modal({ open, onClose, title, children, width = 560 }: {
   open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; width?: number
 }) {
+  const titleId = useId()
+  const panelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
+    const prevActive = document.activeElement as HTMLElement | null
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden' // Hintergrund-Scroll sperren
+    const focusables = () => [...(panelRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) ?? [])].filter((el) => el.offsetParent !== null)
+    const id = window.setTimeout(() => (focusables()[0] ?? panelRef.current)?.focus(), 0)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key === 'Tab') {
+        const items = focusables()
+        if (!items.length) return
+        const first = items[0], last = items[items.length - 1]
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.clearTimeout(id)
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+      prevActive?.focus?.()
+    }
   }, [open, onClose])
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 bg-[rgba(20,20,24,0.42)] backdrop-blur-[2px] anim-fade"
       onClick={onClose}>
-      <div className="card anim-pop w-full mt-[6vh] max-h-[88vh] overflow-y-auto" style={{ maxWidth: width, boxShadow: 'var(--shadow-pop)' }}
-        onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div ref={panelRef} tabIndex={-1} className="card anim-pop w-full mt-[6vh] max-h-[88vh] overflow-y-auto outline-none" style={{ maxWidth: width, boxShadow: 'var(--shadow-pop)' }}
+        onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-line)]">
-          <h3 id="modal-title" className="text-[15px] font-semibold">{title}</h3>
+          <h3 id={titleId} className="text-[15px] font-semibold">{title}</h3>
           <button onClick={onClose} aria-label="Schließen" className="focusable p-1.5 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-line-soft)]">
             <X size={18} />
           </button>
@@ -119,10 +142,11 @@ export function BrandWave({ className = '', color = 'var(--color-canvas)' }: { c
 }
 
 /* ---- Status-Badge (Antragsstatus) ----------------------------------------- */
+// Textton je Status abgedunkelt, damit die Badges WCAG AA auf hellem Grund erreichen.
 const STATUS_STYLE: Record<AbsenceStatus, { label: string; bg: string; fg: string }> = {
-  requested: { label: 'Beantragt', bg: 'var(--color-warn-bg)', fg: 'var(--color-warn)' },
-  approved: { label: 'Genehmigt', bg: 'var(--color-ok-bg)', fg: 'var(--color-ok)' },
-  rejected: { label: 'Abgelehnt', bg: 'var(--color-crit-bg)', fg: 'var(--color-crit)' },
+  requested: { label: 'Beantragt', bg: 'var(--color-warn-bg)', fg: 'color-mix(in srgb, var(--color-warn) 80%, black)' },
+  approved: { label: 'Genehmigt', bg: 'var(--color-ok-bg)', fg: 'color-mix(in srgb, var(--color-ok) 80%, black)' },
+  rejected: { label: 'Abgelehnt', bg: 'var(--color-crit-bg)', fg: 'color-mix(in srgb, var(--color-crit) 88%, black)' },
 }
 export function StatusBadge({ status }: { status: AbsenceStatus }) {
   const s = STATUS_STYLE[status]

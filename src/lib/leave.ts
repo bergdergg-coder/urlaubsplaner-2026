@@ -1,7 +1,7 @@
 import type { Absence, Employee, HolidayRegion } from '../domain/types'
 import { COMPANY_MAP } from '../domain/seed'
 import { isHoliday } from '../domain/holidays'
-import { daysBetweenInclusive, weekdayMon0, iso, YEAR, TODAY } from './dates'
+import { daysBetweenInclusive, weekdayMon0, iso, YEAR, YEAR_START, YEAR_END, TODAY } from './dates'
 
 /* ============================================================================
    Urlaubstage-Berechnung & Resturlaubs-Konto
@@ -63,6 +63,28 @@ export function absenceDays(a: Absence, employee: Employee): number {
   return vacationWorkdays(a, regionOf(employee), workdaysOf(employee))
 }
 
+/** Wirksames Fenster im Planungsjahr: Schnittmenge aus Jahr und Beschäftigung (Ein-/Austritt). */
+function windowOf(e: Employee): { start: string; end: string } {
+  const start = e.entryDate && e.entryDate > YEAR_START ? e.entryDate : YEAR_START
+  const end = e.exitDate && e.exitDate < YEAR_END ? e.exitDate : YEAR_END
+  return { start, end }
+}
+
+/** Urlaubstage einer Abwesenheit, begrenzt auf Planungsjahr + Beschäftigungsfenster.
+   So bleiben Anspruch (anteilig) und Verbrauch konsistent; Urlaube außerhalb (Altdaten,
+   Import mit Fremdjahr, vor Eintritt/nach Austritt) zählen nicht ins Konto. */
+function windowedWorkdays(a: Absence, employee: Employee, capEnd?: string): number {
+  if (a.type !== 'vacation') return 0
+  const w = windowOf(employee)
+  const lo = a.start < w.start ? w.start : a.start
+  let hi = a.end > w.end ? w.end : a.end
+  if (capEnd && hi > capEnd) hi = capEnd
+  if (lo > hi) return 0
+  // Halbtag nur, wenn der echte erste Tag im Fenster liegt (nicht weggeklemmt wurde).
+  const half = !!a.halfDayStart && a.start === lo
+  return workdaysInRange(lo, hi, regionOf(employee), half, workdaysOf(employee))
+}
+
 function lastDayOfMonth(year: number, month1: number): number {
   return new Date(year, month1, 0).getDate()
 }
@@ -85,11 +107,9 @@ export function effectiveEntitlement(e: Employee, year = YEAR): number {
 
 /** Genommene (genehmigte) Urlaubstage eines Mitarbeiters. */
 export function takenFor(employee: Employee, absences: Absence[]): number {
-  const region = regionOf(employee)
-  const wd = workdaysOf(employee)
   return absences
     .filter((a) => a.employeeId === employee.id && a.type === 'vacation' && a.status === 'approved')
-    .reduce((s, a) => s + vacationWorkdays(a, region, wd), 0)
+    .reduce((s, a) => s + windowedWorkdays(a, employee), 0)
 }
 
 /** Stichtag (MM-TT), bis zu dem der Resturlaub aus dem Vorjahr genommen sein muss. */
@@ -124,15 +144,15 @@ export interface LeaveAccount {
 
 /** Berechnet das Resturlaubs-Konto eines Mitarbeiters. `today` steuert den Verfall. */
 export function leaveAccount(employee: Employee, absences: Absence[], today = TODAY): LeaveAccount {
-  const region = regionOf(employee)
   const wd = workdaysOf(employee)
   const mine = absences.filter((a) => a.employeeId === employee.id && a.type === 'vacation')
+  // Verbrauch konsequent aufs Beschäftigungsfenster im Planungsjahr begrenzen.
   const approved = mine
     .filter((a) => a.status === 'approved')
-    .reduce((s, a) => s + vacationWorkdays(a, region, wd), 0)
+    .reduce((s, a) => s + windowedWorkdays(a, employee), 0)
   const requested = mine
     .filter((a) => a.status === 'requested')
-    .reduce((s, a) => s + vacationWorkdays(a, region, wd), 0)
+    .reduce((s, a) => s + windowedWorkdays(a, employee), 0)
 
   const entitlementEffective = effectiveEntitlement(employee)
 
@@ -141,7 +161,7 @@ export function leaveAccount(employee: Employee, absences: Absence[], today = TO
   const expiry = `${YEAR}-${CARRYOVER_EXPIRY_MMDD}`
   const usedByExpiry = mine
     .filter((a) => a.status === 'approved' && a.start <= expiry)
-    .reduce((s, a) => s + workdaysInRange(a.start, a.end < expiry ? a.end : expiry, region, !!a.halfDayStart, wd), 0)
+    .reduce((s, a) => s + windowedWorkdays(a, employee, expiry), 0)
   const carryoverLapsed = today > expiry ? Math.max(0, employee.carryover - usedByExpiry) : 0
   const carryoverEffective = employee.carryover - carryoverLapsed
   const available = entitlementEffective + carryoverEffective

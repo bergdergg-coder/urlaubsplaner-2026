@@ -57,21 +57,26 @@ export function Freigaben() {
               const c = COMPANY_MAP[e.companyId]
               const days = absenceDays(a, e)
               return (
-                <div key={a.id} className="px-5 py-3.5 flex items-start gap-3">
-                  <Avatar e={e} size={38} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-medium flex items-center gap-1.5">{e.name} <CountryFlag country={c.country} /></div>
-                    <div className="text-[13px] text-[var(--color-ink-soft)]">
-                      {a.halfDayStart ? '½ Tag · ' : ''}{formatRangeDE(a.start, a.end)}
-                      <span className="text-[var(--color-muted)]"> · {c.name} · <b className="tnum text-[var(--color-ink-soft)]">{days}</b> Urlaubstag{days === 1 ? '' : 'e'}</span>
-                    </div>
-                    {a.note && (
-                      <div className="text-[12.5px] text-[var(--color-muted)] mt-1 flex items-start gap-1.5">
-                        <MessageSquare size={13} className="mt-0.5 shrink-0" /> <span className="italic">{a.note}</span>
+                <div key={a.id} className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-start gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <Avatar e={e} size={38} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[14px] font-medium flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.accent }} title={c.name} />
+                        <span className="truncate">{e.name}</span> <CountryFlag country={c.country} />
                       </div>
-                    )}
+                      <div className="text-[13px] text-[var(--color-ink-soft)]">
+                        {a.halfDayStart ? '½ Tag · ' : ''}{formatRangeDE(a.start, a.end)}
+                        <span className="text-[var(--color-muted)]"> · {c.name} · <b className="tnum text-[var(--color-ink-soft)]">{days}</b> Urlaubstag{days === 1 ? '' : 'e'}</span>
+                      </div>
+                      {a.note && (
+                        <div className="text-[12.5px] text-[var(--color-muted)] mt-1 flex items-start gap-1.5">
+                          <MessageSquare size={13} className="mt-0.5 shrink-0" /> <span className="italic break-words">{a.note}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
                     <button onClick={() => approveAbsence(a.id, decider)}
                       className="focusable inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[var(--color-ok)] text-white text-[13px] font-semibold hover:opacity-90">
                       <Check size={16} /> Genehmigen

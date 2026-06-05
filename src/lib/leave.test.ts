@@ -149,6 +149,27 @@ describe('Teilzeit (individuelle Arbeitstage)', () => {
   })
 })
 
+describe('Verbrauch begrenzt auf Beschäftigungsfenster & Planungsjahr', () => {
+  it('Urlaub nach dem Austritt zählt nicht ins Konto', () => {
+    const e = emp({ exitDate: '2026-09-30' })
+    const acct = leaveAccount(e, [vac('2026-10-05', '2026-10-09')], '2026-02-01') // nach Austritt
+    expect(acct.approved).toBe(0)
+  })
+  it('Urlaub vor dem Eintritt zählt nicht', () => {
+    const e = emp({ entryDate: '2026-07-01' })
+    expect(leaveAccount(e, [vac('2026-04-06', '2026-04-10')], '2026-02-01').approved).toBe(0)
+  })
+  it('Urlaub, der den Eintritt überlappt, zählt nur ab Eintritt', () => {
+    const e = emp({ entryDate: '2026-07-01' })
+    // 25.06.–03.07.: nur 01.–03.07. (Mi–Fr) liegen im Fenster = 3 Tage
+    expect(leaveAccount(e, [vac('2026-06-25', '2026-07-03')], '2026-02-01').approved).toBe(3)
+  })
+  it('Urlaub in einem anderen Jahr zählt nicht gegen 2026', () => {
+    expect(leaveAccount(emp(), [vac('2027-01-04', '2027-01-08')], '2026-02-01').approved).toBe(0)
+    expect(takenFor(emp(), [vac('2027-01-04', '2027-01-08')])).toBe(0)
+  })
+})
+
 describe('Resturlaub-Verfall (Stichtag 31.03.)', () => {
   const ee = () => emp({ entitlement: 30, carryover: 5 })
   it('vor dem Stichtag ist der Übertrag voll verfügbar', () => {

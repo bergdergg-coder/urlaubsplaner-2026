@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CalendarPlus, Users, Building2, Tags, UserRound } from 'lucide-react'
 import { Modal } from './ui/ui'
 import type { Absence, CompanyId, Employee, RoleGroup } from '../domain/types'
@@ -29,6 +29,11 @@ export function OutlookExportDialog({
   const [persons, setPersons] = useState<Set<string>>(new Set())
   const [onlyNew, setOnlyNew] = useState(false)
 
+  // Auswahl beim Öffnen zurücksetzen (sonst bleibt der letzte Stand „hängen").
+  useEffect(() => {
+    if (open) { setMode('all'); setOnlyNew(false); setPersons(new Set()); setGroups(new Set(['management', 'kader'])) }
+  }, [open])
+
   const inScope = useMemo(
     () => employees.filter((e) => allowedCompanies.includes(e.companyId)),
     [employees, allowedCompanies],
@@ -52,7 +57,7 @@ export function OutlookExportDialog({
 
   function suffixFor(): string {
     if (mode === 'company') return `_${COMPANY_MAP[companyId].name.replace(/\s+/g, '')}`
-    if (mode === 'roleGroup') return `_${[...groups].map((g) => ROLE_GROUP_LABEL[g]).join('-')}`
+    if (mode === 'roleGroup') return `_${ROLE_GROUP_ORDER.filter((g) => groups.has(g)).map((g) => ROLE_GROUP_LABEL[g]).join('-')}`
     if (mode === 'persons') return `_Auswahl`
     return ''
   }
@@ -66,7 +71,7 @@ export function OutlookExportDialog({
 
   const tabs: { id: ExportMode; label: string; icon: typeof Users }[] = [
     { id: 'all', label: 'Alle', icon: Users },
-    { id: 'company', label: 'Nach Firma', icon: Building2 },
+    { id: 'company', label: 'Nach Gesellschaft', icon: Building2 },
     { id: 'roleGroup', label: 'Nach Rolle', icon: Tags },
     { id: 'persons', label: 'Personen', icon: UserRound },
   ]

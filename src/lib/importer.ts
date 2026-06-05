@@ -25,7 +25,7 @@ export function parseDate(v: unknown): string | null {
   return null
 }
 
-const reName = /^(mitarbeiter|name|mitarbeiterin)/i
+const reName = /^(mitarbeiter|mitarbeiterin|name|vorname|nachname|person)/i
 const reStart = /(start|beginn|^ab$|von\b)/i
 const reEnd = /(ende|bis\b)/i
 const reHalf = /(halb|½)/i
@@ -34,9 +34,20 @@ const truthy = /^(ja|x|true|1|wahr|½|halb)/i
 export async function parseImportFile(file: File): Promise<ImportResult> {
   const XLSX = await import('xlsx') // erst beim Import laden (kleinere Startgröße)
   const buf = await file.arrayBuffer()
-  const wb = XLSX.read(buf, { type: 'array', cellDates: true })
+  // raw lesen: KEIN cellDates — sonst wandelt die US-MDY-Heuristik beim Lesen
+  // deutsche TT.MM.JJJJ-Strings (Tag/Monat je ≤12) in falsche Daten. Mit raw
+  // bleiben CSV-Zellen exakte Strings; echte Excel-Datumszellen werden zu Serien.
+  const wb = XLSX.read(buf, { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
-  const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+  const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: true })
+  // Excel-Datums-Serie → ISO; sonst die deutsche parseDate-Regex.
+  const toDate = (v: unknown): string | null => {
+    if (typeof v === 'number' && isFinite(v)) {
+      const o = XLSX.SSF.parse_date_code(v)
+      return o && o.y ? `${o.y}-${pad(o.m)}-${pad(o.d)}` : null
+    }
+    return parseDate(v)
+  }
   const rows: ImportRow[] = []
   let skipped = 0
   if (!json.length) return { rows, skipped }
@@ -49,8 +60,8 @@ export async function parseImportFile(file: File): Promise<ImportResult> {
 
   for (const obj of json) {
     const name = nameKey ? String(obj[nameKey] ?? '').trim() : ''
-    const start = startKey ? parseDate(obj[startKey]) : null
-    const end = endKey ? parseDate(obj[endKey]) : start
+    const start = startKey ? toDate(obj[startKey]) : null
+    const end = endKey ? toDate(obj[endKey]) : start
     if (!name || !start) { skipped++; continue }
     const half = halfKey ? truthy.test(String(obj[halfKey] ?? '').trim()) : false
     rows.push({ name, start, end: end ?? start, half })

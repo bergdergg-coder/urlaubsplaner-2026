@@ -4,7 +4,7 @@ import { Card, Avatar, CountryFlag, Modal } from '../components/ui/ui'
 import { COMPANIES, COMPANY_MAP, DEPARTMENTS } from '../domain/seed'
 import { roleGroupLabelOf } from '../domain/roles'
 import { useData, type EmployeeInput } from '../store/data'
-import { useAuth, type AccountRole } from '../store/auth'
+import { useAuth, type AccountRole, type Account } from '../store/auth'
 import { leaveAccount, effectiveEntitlement, isPartTime } from '../lib/leave'
 import { WEEKDAYS_SHORT_DE } from '../lib/dates'
 import { parseImportFile, importTemplateCsv, type ImportRow } from '../lib/importer'
@@ -64,10 +64,10 @@ export function Stammdaten() {
                     <div key={e.id} className="px-5 py-2.5 flex items-center gap-3">
                       <Avatar e={e} size={34} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-[13.5px] font-medium truncate flex items-center gap-2">
-                          {e.name}
-                          <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--color-line-soft)] text-[var(--color-muted)]">{roleGroupLabelOf(e)}</span>
-                          {isPartTime(e) && <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--color-info-bg)] text-[var(--color-info)]">Teilzeit</span>}
+                        <div className="text-[13.5px] font-medium flex items-center gap-2 min-w-0">
+                          <span className="truncate" title={e.name}>{e.name}</span>
+                          <span className="shrink-0 text-[10.5px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--color-line-soft)] text-[var(--color-muted)]">{roleGroupLabelOf(e)}</span>
+                          {isPartTime(e) && <span className="shrink-0 text-[10.5px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--color-info-bg)] text-[var(--color-info)]">Teilzeit</span>}
                         </div>
                         <div className="text-[12px] text-[var(--color-muted)] tnum">
                           {acct.available} Tage{acct.entitlementEffective !== acct.entitlement ? ` (anteilig)` : ''} · {acct.approved} genommen{acct.requested ? ` · ${acct.requested} beantragt` : ''}{acct.carryoverLapsed ? ` · ${acct.carryoverLapsed} verfallen` : ''} · <span className="font-medium" style={{ color: acct.remaining < 0 ? 'var(--color-crit)' : 'var(--color-ink-soft)' }}>{acct.remaining} übrig</span>
@@ -132,7 +132,8 @@ function EmployeeDialog({ emp, scope, isSuper, onClose, onSave }: {
   const [entryDate, setEntryDate] = useState(emp?.entryDate ?? '')
   const [exitDate, setExitDate] = useState(emp?.exitDate ?? '')
   const field = 'w-full h-10 px-3 rounded-lg border border-[var(--color-line)] bg-white text-[14px] focusable'
-  const valid = name.trim().length > 0
+  const datesValid = !(entryDate && exitDate && exitDate < entryDate)
+  const valid = name.trim().length > 0 && days.length > 0 && datesValid
   const selectable = COMPANIES.filter((c) => scope.includes(c.id))
   const toggleDay = (i: number) => setDays((d) => d.includes(i) ? d.filter((x) => x !== i) : [...d, i].sort((a, b) => a - b))
   const fullTime = days.length === 5 && [0, 1, 2, 3, 4].every((d) => days.includes(d))
@@ -208,8 +209,9 @@ function EmployeeDialog({ emp, scope, isSuper, onClose, onSave }: {
                 }}>{lbl}</button>
             ))}
           </div>
-          <p className="text-[11px] text-[var(--color-faint)] mt-1">
-            {fullTime ? 'Vollzeit (Mo–Fr).' : `Teilzeit: ${days.map((d) => WEEKDAYS_SHORT_DE[d]).join(', ')} (${days.length} Tage/Woche).`}
+          <p className="text-[11px] mt-1" style={{ color: days.length === 0 ? 'var(--color-crit)' : 'var(--color-faint)' }}>
+            {days.length === 0 ? 'Mindestens ein Arbeitstag erforderlich.'
+              : fullTime ? 'Vollzeit (Mo–Fr).' : `Teilzeit: ${days.map((d) => WEEKDAYS_SHORT_DE[d]).join(', ')} (${days.length} Tage/Woche).`}
           </p>
         </div>
 
@@ -217,13 +219,14 @@ function EmployeeDialog({ emp, scope, isSuper, onClose, onSave }: {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="emp-entry" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Eintritt <span className="text-[var(--color-faint)] font-normal">(optional)</span></label>
-            <input id="emp-entry" type="date" className={field} value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
+            <input id="emp-entry" type="date" className={field} value={entryDate} max={exitDate || undefined} onChange={(e) => setEntryDate(e.target.value)} />
           </div>
           <div>
             <label htmlFor="emp-exit" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Austritt <span className="text-[var(--color-faint)] font-normal">(optional)</span></label>
-            <input id="emp-exit" type="date" className={field} value={exitDate} onChange={(e) => setExitDate(e.target.value)} />
+            <input id="emp-exit" type="date" className={field} value={exitDate} min={entryDate || undefined} onChange={(e) => setExitDate(e.target.value)} />
           </div>
         </div>
+        {!datesValid && <div className="text-[11.5px] text-[var(--color-crit)] -mt-2">Austritt darf nicht vor dem Eintritt liegen.</div>}
 
         {proRata && (
           <div className="text-[12px] text-[var(--color-ink-soft)] bg-[var(--color-canvas)] rounded-lg px-3 py-2">
@@ -316,20 +319,23 @@ function AccountsCard() {
           </button>
         </div>
       )}
-      {open && <NewAccountDialog employees={employees} scope={scopeCompanies} isAdmin={isAdmin}
+      {open && <NewAccountDialog employees={employees} accounts={accounts} scope={scopeCompanies} isAdmin={isAdmin}
         onClose={() => setOpen(false)} onCreate={createAccount} />}
     </Card>
   )
 }
 
-function NewAccountDialog({ employees, scope, isAdmin, onClose, onCreate }: {
+function NewAccountDialog({ employees, accounts, scope, isAdmin, onClose, onCreate }: {
   employees: Employee[]
+  accounts: Account[]
   scope: CompanyId[]
   isAdmin: boolean
   onClose: () => void
   onCreate: (input: { employeeId: string; companyId: CompanyId; role: AccountRole; label: string; password: string }) => { ok: boolean; error?: string }
 }) {
-  const inScope = employees.filter((e) => scope.includes(e.companyId))
+  // Mitarbeiter mit bestehendem Zugang ausblenden (ein Zugang pro Person).
+  const taken = new Set(accounts.map((a) => a.employeeId).filter(Boolean))
+  const inScope = employees.filter((e) => scope.includes(e.companyId) && !taken.has(e.id))
   const [employeeId, setEmployeeId] = useState(inScope[0]?.id ?? '')
   const [role, setRole] = useState<AccountRole>('employee')
   const [password, setPassword] = useState('123')
@@ -356,13 +362,20 @@ function NewAccountDialog({ employees, scope, isAdmin, onClose, onCreate }: {
         </p>
         <div>
           <label htmlFor="acc-emp" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Mitarbeiter</label>
-          <select id="acc-emp" className={`${field} cursor-pointer`} value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setError(null) }}>
-            {COMPANIES.filter((c) => scope.includes(c.id)).map((c) => (
-              <optgroup key={c.id} label={c.name}>
-                {inScope.filter((e) => e.companyId === c.id).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </optgroup>
-            ))}
-          </select>
+          {inScope.length === 0 ? (
+            <div className="text-[12.5px] text-[var(--color-muted)] bg-[var(--color-canvas)] rounded-lg px-3 py-2">Alle Mitarbeiter im Bereich haben bereits einen Zugang.</div>
+          ) : (
+            <select id="acc-emp" className={`${field} cursor-pointer`} value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setError(null) }}>
+              {COMPANIES.filter((c) => scope.includes(c.id)).map((c) => {
+                const emps = inScope.filter((e) => e.companyId === c.id)
+                return emps.length === 0 ? null : (
+                  <optgroup key={c.id} label={c.name}>
+                    {emps.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </optgroup>
+                )
+              })}
+            </select>
+          )}
         </div>
         <div>
           <label htmlFor="acc-role" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Rolle</label>
@@ -378,8 +391,8 @@ function NewAccountDialog({ employees, scope, isAdmin, onClose, onCreate }: {
         {error && <div className="text-[12.5px] text-[var(--color-crit)] bg-[var(--color-crit-bg)] rounded-lg px-3 py-2">{error}</div>}
         <div className="flex items-center justify-end gap-2 pt-1">
           <button onClick={onClose} className="focusable h-10 px-4 rounded-lg text-[13px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-line-soft)]">Abbrechen</button>
-          <button onClick={submit}
-            className="focusable inline-flex items-center gap-1.5 h-10 px-5 rounded-lg bg-[var(--color-ww-red)] text-white text-[13px] font-semibold hover:bg-[var(--color-ww-red-600)]">
+          <button onClick={submit} disabled={inScope.length === 0 || !password.trim()}
+            className="focusable inline-flex items-center gap-1.5 h-10 px-5 rounded-lg bg-[var(--color-ww-red)] text-white text-[13px] font-semibold hover:bg-[var(--color-ww-red-600)] disabled:opacity-40 disabled:cursor-not-allowed">
             <KeyRound size={15} /> Zugang anlegen
           </button>
         </div>

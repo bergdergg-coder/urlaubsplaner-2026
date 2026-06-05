@@ -45,10 +45,11 @@ export function Login() {
               <label htmlFor="pw" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Passwort</label>
               <div className="relative">
                 <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-faint)]" />
-                <input id="pw" type="password" className={`${field} pl-9`} value={pw} autoFocus
+                <input id="pw" name="password" type="password" autoComplete="current-password" className={`${field} pl-9`} value={pw} autoFocus
+                  aria-invalid={error || undefined} aria-describedby={error ? 'pw-error' : undefined}
                   onChange={(e) => { setPw(e.target.value); setError(false) }} placeholder="••••" />
               </div>
-              {error && <p role="alert" className="text-[12px] text-[var(--color-crit)] mt-1.5">Falsches Passwort.</p>}
+              {error && <p id="pw-error" role="alert" className="text-[12px] text-[var(--color-crit)] mt-1.5">Falsches Passwort.</p>}
             </div>
 
             <button type="submit"
@@ -57,8 +58,8 @@ export function Login() {
             </button>
           </form>
         </div>
-        <p className="text-center text-[11.5px] text-[var(--color-faint)] mt-3">
-          Demo-Zugänge: Administrator, Firmenadministrator und Mitarbeiter · Passwort überall: 123
+        <p className="text-center text-[11.5px] text-[var(--color-muted)] mt-3">
+          Demo-Zugänge: Administrator, Firmenadministrator und Mitarbeiter · Passwort überall: <strong>123</strong>
         </p>
       </div>
     </div>

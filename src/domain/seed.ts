@@ -21,7 +21,7 @@ export const COMPANIES: Company[] = [
   {
     id: 'WGV', name: 'WGV', legalName: 'Würzburger Gruppe Verwaltung',
     country: 'DE', location: 'Stuttgart (DE)', holidayRegion: 'BW',
-    accent: 'var(--color-wgv)', accentText: '#ffffff', accentSoft: 'var(--color-wgv-soft)',
+    accent: 'var(--color-wgv)', accentText: '#3a1d00', accentSoft: 'var(--color-wgv-soft)',
     thresholds: { yellow: 3, red: 5 },
   },
   {
@@ -58,12 +58,12 @@ type Mini = {
 }
 const RAW: Mini[] = [
   // WGV — Holding / gruppenweite Verwaltung (DE)
-  { id: 'wolfgang-w', name: 'Wolfgang Würzburger', companyId: 'WGV', jobTitle: 'Geschäftsführender Gesellschafter', department: 'Geschäftsführung', role: 'group_management', key: true, mgmt: true, deputies: ['susanne-w'], carry: 8 },
+  { id: 'wolfgang-w', name: 'Wolfgang Würzburger', companyId: 'WGV', jobTitle: 'Geschäftsführender Gesellschafter', department: 'Geschäftsführung', role: 'admin', key: true, mgmt: true, deputies: ['susanne-w'], carry: 8 },
   { id: 'susanne-w', name: 'Susanne Würzburger', companyId: 'WGV', jobTitle: 'Leitung Verwaltung', department: 'Geschäftsführung', role: 'company_manager', key: true, mgmt: true, deputies: ['wolfgang-w'], carry: 5 },
   { id: 'rebecca-w', name: 'Rebecca Würzburger', companyId: 'WGV', jobTitle: 'Assistenz der GF', department: 'Verwaltung', carry: 3 },
   { id: 'nadja-p', name: 'Nadja Pereira', companyId: 'WGV', jobTitle: 'Leitung Buchhaltung', department: 'Buchhaltung / Lohn', key: true, deputies: ['lirije-r'], carry: 4 },
   { id: 'eric-d', name: 'Eric Dijkhof', companyId: 'WGV', jobTitle: 'Leitung IT (Gruppe)', department: 'IT', role: 'admin', key: true, deputies: ['andreas-s'], carry: 6 },
-  { id: 'wolfgang-m', name: 'Wolfgang Müller', companyId: 'WGV', jobTitle: 'Disposition', department: 'Disposition', key: true, deputies: ['viktor-h'] },
+  { id: 'wolfgang-m', name: 'Wolfgang Müller', companyId: 'WGV', jobTitle: 'Disposition', department: 'Disposition', key: true, deputies: ['viktor-h', 'andreas-s'] },
   { id: 'sascha-e', name: 'Sascha Eichin', companyId: 'WGV', jobTitle: 'Vertrieb', department: 'Vertrieb' },
   // Teilzeit: arbeitet Mo–Mi (3-Tage-Woche), Anspruch entsprechend 18 Tage.
   { id: 'lirije-r', name: 'Lirije Ramqaj', companyId: 'WGV', jobTitle: 'Lohnbuchhaltung (Teilzeit)', department: 'Buchhaltung / Lohn', deputies: ['nadja-p'], ent: 18, workdays: [0, 1, 2] },

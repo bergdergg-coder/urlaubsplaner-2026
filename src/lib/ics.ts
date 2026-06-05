@@ -1,4 +1,5 @@
 import type { Absence, Employee } from '../domain/types'
+import { COMPANY_MAP } from '../domain/seed'
 import { addDays } from './dates'
 
 /* iCalendar-Export (RFC 5545) — von Outlook nativ erkannt.
@@ -75,8 +76,11 @@ export function outlookIcs(
   ]
 
   for (const a of events) {
-    const name = employeeMap[a.employeeId]?.name ?? a.employeeId
+    const emp = employeeMap[a.employeeId]
+    const name = emp?.name ?? a.employeeId
+    const company = emp ? COMPANY_MAP[emp.companyId]?.name : undefined
     const half = a.halfDayStart || a.halfDayEnd ? ' (½ Tag)' : ''
+    const requested = a.status === 'requested'
     lines.push(
       'BEGIN:VEVENT',
       `UID:${a.id}@urlaubsplaner.wuerzburger-gruppe`,
@@ -84,11 +88,14 @@ export function outlookIcs(
       // Ganztags: DATE-Werte; DTEND ist exklusiv -> letzter Urlaubstag + 1.
       `DTSTART;VALUE=DATE:${icsDate(a.start)}`,
       `DTEND;VALUE=DATE:${icsDate(addDays(a.end, 1))}`,
-      `SUMMARY:${escText(`Urlaub: ${name}${half}`)}`,
+      `SUMMARY:${escText(`Urlaub: ${name}${half}${requested ? ' (Antrag)' : ''}`)}`,
       'TRANSP:TRANSPARENT',
       'X-MICROSOFT-CDO-BUSYSTATUS:FREE',
-      'CATEGORIES:Urlaub',
-      'STATUS:CONFIRMED',
+      // Firmenname als zweite Kategorie → in Outlook einfärbbar. Komma trennt die
+      // Kategorien (Listenseparator), daher je Kategorie escapen, nicht das Komma.
+      `CATEGORIES:${['Urlaub', company].filter(Boolean).map((v) => escText(v as string)).join(',')}`,
+      // Offene Anträge als unverbindlich kennzeichnen.
+      `STATUS:${requested ? 'TENTATIVE' : 'CONFIRMED'}`,
       'END:VEVENT',
     )
   }

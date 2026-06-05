@@ -92,6 +92,11 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
     () => pickNew(scopeVacations, exported, employeeMap),
     [scopeVacations, exported, employeeMap],
   )
+  // Resturlaubs-Konten einmal pro (employees, absences) berechnen statt je Render & Zeile.
+  const accountByEmp = useMemo(
+    () => new Map(employees.map((e) => [e.id, leaveAccount(e, absences)])),
+    [employees, absences],
+  )
   const isExported = (a: Absence) => exported.has(vacationSig(a, employeeMap[a.employeeId]?.name ?? a.employeeId))
 
   function markExported(list: Absence[]) {
@@ -181,14 +186,15 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
             <span key={co.id} className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: co.accent }} /> {co.name}</span>
           ))}
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm border-[1.5px] border-dashed bg-white border-[var(--color-faint)]" /> Antrag (offen)</span>
-          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-ww-red)' }} /> Feiertag</span>
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-faint)' }} /> Feiertag</span>
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--color-canvas)', boxShadow: 'inset 0 0 0 1px var(--color-line)' }} /> Wochenende</span>
           <span className="inline-flex items-center gap-1.5">Zahl rechts = Resturlaub</span>
         </div>
 
         {/* Raster */}
         <div className="overflow-x-auto print-expand">
-          <div className="relative" style={{ width: NAME_W + W }}>
+          {/* print-fit + --print-scale: skaliert das (im Jahr sehr breite) Raster im Druck auf Seitenbreite. */}
+          <div className="relative print-fit" style={{ width: NAME_W + W, ['--print-scale' as string]: String(Math.min(1, 1010 / (NAME_W + W))) } as CSSProperties}>
             {/* Kopfzeile */}
             <div className="flex sticky top-16 z-20 bg-white border-b border-[var(--color-line)]">
               <div className="shrink-0 sticky left-0 z-10 bg-white border-r border-[var(--color-line)] flex items-center justify-between px-4"
@@ -206,7 +212,7 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                         style={{ width: cell, background: we ? 'var(--color-canvas)' : undefined }} title={hol?.name}>
                         <div className="text-[9.5px] text-[var(--color-faint)] leading-none">{WEEKDAYS_SHORT_DE[weekdayMon0(d)]}</div>
                         <div className={`text-[12px] tnum leading-none mt-1 ${we ? 'text-[var(--color-faint)]' : 'font-medium'}`}>{parseInt(d.slice(8))}</div>
-                        {hol && <div className="mx-auto mt-1 w-1 h-1 rounded-full" style={{ background: 'var(--color-ww-red)' }} />}
+                        {hol && <div className="mx-auto mt-1 w-1 h-1 rounded-full" style={{ background: 'var(--color-faint)' }} />}
                       </div>
                     )
                   })}
@@ -228,7 +234,7 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
               const holidays = visibleDays.map((d, i) => ({ i, h: holidayFor(d, company.holidayRegion) })).filter((x) => x.h)
               return (
                 <div key={company.id}>
-                  <div className="flex bg-[var(--color-canvas)] border-b border-[var(--color-line)]" style={{ width: NAME_W + W }}>
+                  <div className="print-row flex bg-[var(--color-canvas)] border-b border-[var(--color-line)]" style={{ width: NAME_W + W }}>
                     <div className="shrink-0 sticky left-0 z-10 bg-[var(--color-canvas)] flex items-center gap-1.5 px-4" style={{ width: NAME_W, height: 28 }}>
                       <span className="w-2 h-2 rounded-full" style={{ background: company.accent }} />
                       <span className="text-[12px] font-semibold">{company.name}</span>
@@ -241,7 +247,7 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                   </div>
 
                   {emps.length === 0 && (
-                    <div className="flex border-b border-[var(--color-line-soft)]">
+                    <div className="print-row flex border-b border-[var(--color-line-soft)]">
                       <div className="shrink-0 sticky left-0 z-10 bg-white border-r border-[var(--color-line)] flex items-center px-4" style={{ width: NAME_W, height: 30 }}>
                         <span className="text-[12px] text-[var(--color-faint)] italic">Keine Mitarbeiter</span>
                       </div>
@@ -251,12 +257,12 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
 
                   {emps.map((e) => {
                     const rows = absences.filter((a) => a.employeeId === e.id && a.status !== 'rejected' && a.start <= lastDay && a.end >= firstDay)
-                    const rem = leaveAccount(e, absences).remaining
+                    const rem = accountByEmp.get(e.id)?.remaining ?? 0
                     return (
-                      <div key={e.id} className="flex border-b border-[var(--color-line-soft)] group">
+                      <div key={e.id} className="print-row flex border-b border-[var(--color-line-soft)] group">
                         <div className="shrink-0 sticky left-0 z-10 bg-white border-r border-[var(--color-line)] flex items-center justify-between gap-2 px-4 transition-colors group-hover:bg-[var(--color-line-soft)]/50" style={{ width: NAME_W, height: 30 }}>
                           <span className="text-[12.5px] font-medium truncate" title={e.name}>{e.name}</span>
-                          <span className="text-[11px] tnum shrink-0" style={{ color: rem < 0 ? 'var(--color-crit)' : 'var(--color-faint)' }} title={`Resturlaub: ${rem} von ${e.entitlement + e.carryover} Tagen`}>{rem}</span>
+                          <span className="text-[11px] tnum shrink-0" style={{ color: rem < 0 ? 'var(--color-crit)' : 'var(--color-faint)' }} title={`Resturlaub: ${rem} Tage`}>{rem}</span>
                         </div>
                         <div className="relative cursor-cell" style={{ width: W, height: 30, ...weekendStyle }}
                           onClick={(ev) => {
@@ -265,7 +271,7 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                             onCellClick(e.id, visibleDays[di])
                           }}>
                           {holidays.map(({ i }) => (
-                            <div key={i} className="absolute top-0 h-full pointer-events-none" style={{ left: i * cell, width: cell, background: 'color-mix(in srgb, var(--color-ww-red) 6%, transparent)' }} />
+                            <div key={i} className="absolute top-0 h-full pointer-events-none" style={{ left: i * cell, width: cell, background: 'color-mix(in srgb, var(--color-ink) 5%, transparent)' }} />
                           ))}
                           {rows.map((a) => {
                             const s = a.start < firstDay ? firstDay : a.start
@@ -276,16 +282,19 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                             const w = singleHalf ? Math.max(8, Math.round(cell * 0.5)) : (ei - si + 1) * cell - 2
                             const requested = a.status === 'requested'
                             return (
-                              <div key={a.id} title={`${e.name} · ${company.name} · ${requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub')}\n${formatRangeDE(a.start, a.end)}\nKlick zum Bearbeiten`}
+                              <div key={a.id} role="button" tabIndex={0}
+                                aria-label={`${e.name}: ${requested ? 'Antrag' : 'Urlaub'} ${formatRangeDE(a.start, a.end)} – bearbeiten`}
+                                title={`${e.name} · ${company.name} · ${requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub')}\n${formatRangeDE(a.start, a.end)}\nKlick/Enter zum Bearbeiten`}
                                 onClick={(ev) => { ev.stopPropagation(); onEditAbsence(a) }}
-                                className="absolute rounded-[5px] flex items-center px-1.5 overflow-hidden cursor-pointer group/bar"
+                                onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); onEditAbsence(a) } }}
+                                className="focusable absolute rounded-[5px] flex items-center px-1.5 overflow-hidden cursor-pointer group/bar"
                                 style={{ left: si * cell + 1, width: w, top: 5, height: 20,
                                   background: requested ? `color-mix(in srgb, ${company.accent} 18%, white)` : company.accent,
                                   border: requested ? `1.5px dashed ${company.accent}` : 'none',
-                                  color: requested ? `color-mix(in srgb, ${company.accent} 78%, black)` : company.accentText }}>
+                                  color: requested ? `color-mix(in srgb, ${company.accent} 82%, black)` : company.accentText }}>
                                 {w > 40 && <span className="text-[10.5px] font-medium truncate">{a.halfDayStart ? '½ ' : ''}{requested ? 'Antrag' : 'Urlaub'}</span>}
                                 <button onClick={(ev) => { ev.stopPropagation(); removeAbsence(a.id) }}
-                                  className="no-print ml-auto opacity-0 group-hover/bar:opacity-100 shrink-0 rounded p-0.5 transition-opacity hover:bg-black/20" title="Entfernen" aria-label="Urlaub entfernen"><X size={11} /></button>
+                                  className="focusable no-print ml-auto opacity-0 group-hover/bar:opacity-100 focus-visible:opacity-100 shrink-0 rounded p-0.5 transition-opacity hover:bg-black/20" title="Entfernen" aria-label={`Urlaub von ${e.name} entfernen`}><X size={11} /></button>
                               </div>
                             )
                           })}

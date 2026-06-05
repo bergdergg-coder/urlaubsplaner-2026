@@ -16,7 +16,8 @@
   --color-ink: #17171b;
   --color-ink-soft: #3f3f46;
   --color-muted: #6c6c76;
-  --color-faint: #9a9aa4;
+  /* angehoben für lesbaren Kontrast (vorher #9a9aa4 unter WCAG AA) */
+  --color-faint: #70707a;
   --color-line: #e9e9ee;
   --color-line-soft: #f1f1f4;
   --color-canvas: #f5f5f7;
@@ -108,6 +109,7 @@
    ========================================================================== */
 @media print {
   @page { size: A4 landscape; margin: 9mm; }
+  @page portraitpage { size: A4 portrait; margin: 12mm; }
   html, body { background: #fff !important; }
   .no-print { display: none !important; }
 
@@ -120,6 +122,10 @@
     position: absolute !important; left: 0; top: 0; width: 100%;
     box-shadow: none !important; border: none !important;
   }
+  /* Hochformat-Dokumente (Controlling, Pro Person) */
+  body.print-portrait .print-target { page: portraitpage; }
+  /* Karte im Druck auffalten, damit breite Raster nicht hart abgeschnitten werden */
+  body.printing .print-target .card { overflow: visible !important; box-shadow: none !important; }
   /* Hintergrundfarben (Urlaubsbalken, Schattierungen, Farbrampe, Heatmap, Hero, KPIs) wirklich drucken */
   body.printing .print-target,
   body.printing .print-target * {
@@ -132,6 +138,11 @@
   body.printing .print-target .print-expand {
     overflow: visible !important; width: auto !important; max-height: none !important;
   }
-  /* Mitarbeiterzeilen und Gesellschaftsblöcke nicht über Seitenumbrüche zerschneiden */
-  body.printing .print-target .print-expand > div > div { break-inside: avoid; }
+  /* Breites Raster (v. a. Jahresansicht) auf Seitenbreite skalieren — sonst wird
+     der Großteil des Jahres stumm abgeschnitten. --print-scale setzt der Planner. */
+  body.printing .print-target .print-fit {
+    transform: scale(var(--print-scale, 1)); transform-origin: top left;
+  }
+  /* Einzelne Mitarbeiterzeilen & Firmenköpfe nicht über Seitenumbrüche zerschneiden */
+  body.printing .print-target .print-row { break-inside: avoid; }
 }

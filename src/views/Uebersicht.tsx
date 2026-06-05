@@ -8,7 +8,7 @@ import { useAuth } from '../store/auth'
 import { leaveAccount, absenceDays } from '../lib/leave'
 import { formatRangeDE, formatDE, WEEKDAYS_SHORT_DE, MONTHS_SHORT_DE, yearDays, daysBetweenInclusive, iso, YEAR, YEAR_START, YEAR_END, TODAY } from '../lib/dates'
 import { holidayFor } from '../domain/holidays'
-import type { Absence } from '../domain/types'
+import type { Absence, HolidayRegion } from '../domain/types'
 import { printElement } from '../lib/print'
 
 /* Urlaubsübersicht je Person — Resturlaubskonto + Antragsliste.
@@ -46,7 +46,9 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
     { label: 'Verbleibend', value: acct.remaining, tone: acct.remaining < 0 ? 'crit' : 'ok' },
   ]
   const toneColor: Record<string, string> = {
-    accent: c.accent, ok: 'var(--color-ok)', warn: 'var(--color-warn)', crit: 'var(--color-crit)',
+    // Firmenfarbe als große Zahl abdunkeln (sonst zu kontrastarm, v.a. GmbH-Grün auf Weiß).
+    accent: `color-mix(in srgb, ${c.accent} 68%, var(--color-ink))`,
+    ok: 'var(--color-ok)', warn: 'var(--color-warn)', crit: 'var(--color-crit)',
   }
 
   return (
@@ -56,7 +58,7 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
         <div>
           <h2 className="text-[17px] font-semibold tracking-tight">Urlaubsübersicht pro Person</h2>
           <p className="text-[13px] text-[var(--color-muted)] mt-0.5">
-            {isEmployee ? 'Deine Urlaube, dein Resturlaub und der Status deiner Anträge.' : 'Resturlaubskonto und Anträge einer Person.'}
+            {isEmployee ? 'Eigene Urlaube, Resturlaub und der Status der eigenen Anträge.' : 'Resturlaubskonto und Anträge einer Person.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -76,7 +78,7 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
             className="focusable inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[var(--color-ww-red)] text-white text-[13px] font-semibold hover:bg-[var(--color-ww-red-600)]">
             <Plus size={15} /> {isEmployee ? 'Urlaub beantragen' : 'Urlaub eintragen'}
           </button>
-          <button onClick={() => printElement(ref.current)}
+          <button onClick={() => printElement(ref.current, 'portrait')}
             className="focusable inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--color-line)] text-[13px] font-medium hover:bg-[var(--color-line-soft)]">
             <Printer size={15} /> Drucken
           </button>
@@ -135,7 +137,7 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
               <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm border border-dashed bg-white" style={{ borderColor: c.accent }} /> Antrag</span>
             </div>
           </div>
-          <YearTaken absences={mine} color={c.accent} />
+          <YearTaken absences={mine} color={c.accent} region={c.holidayRegion} />
         </div>
 
         {/* Antrags-/Urlaubsliste */}
@@ -167,7 +169,7 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
 
 /* Kompakter Jahresverlauf: zeigt, WANN im Jahr Urlaub genommen wurde (in der
    Firmenfarbe), mit Monatsrastern und Heute-Markierung. Anträge gestrichelt. */
-function YearTaken({ absences, color }: { absences: Absence[]; color: string }) {
+function YearTaken({ absences, color, region }: { absences: Absence[]; color: string; region: HolidayRegion }) {
   const days = yearDays()
   const total = days.length
   const dayIdx = (d: string) => Math.max(0, Math.min(total - 1, daysBetweenInclusive(YEAR_START, d).length - 1))
@@ -181,8 +183,8 @@ function YearTaken({ absences, color }: { absences: Absence[]; color: string }) 
     })
   const months = Array.from({ length: 12 }, (_, m) => ({ label: MONTHS_SHORT_DE[m], left: (dayIdx(iso(YEAR, m + 1, 1)) / total) * 100 }))
   const todayLeft = TODAY >= YEAR_START && TODAY <= YEAR_END ? (dayIdx(TODAY) / total) * 100 : -1
-  // Feiertagsmarkierungen (BW als Referenz) – dezente Punkte unter der Leiste.
-  const holiMarks = days.map((d, i) => ({ i, h: holidayFor(d, 'BW') })).filter((x) => x.h).map((x) => (x.i / total) * 100)
+  // Feiertage gemäß der Region der Person (BW oder CH) – neutrale Ticks, über den Balken sichtbar.
+  const holiMarks = days.map((d, i) => ({ i, h: holidayFor(d, region) })).filter((x) => x.h).map((x) => (x.i / total) * 100)
   return (
     <div>
       <div className="relative h-3.5 mb-1 text-[9.5px] text-[var(--color-faint)]">
@@ -190,7 +192,6 @@ function YearTaken({ absences, color }: { absences: Absence[]; color: string }) 
       </div>
       <div className="relative h-7 rounded-md bg-[var(--color-canvas)] border border-[var(--color-line)] overflow-hidden">
         {months.map((m, i) => i === 0 ? null : <div key={m.label} className="absolute top-0 bottom-0 w-px bg-[var(--color-line)]" style={{ left: `${m.left}%` }} />)}
-        {holiMarks.map((l, i) => <div key={`h${i}`} className="absolute bottom-0 w-px h-1.5 bg-[var(--color-ww-red)]/40" style={{ left: `${l}%` }} />)}
         {segs.length === 0 && <div className="absolute inset-0 flex items-center justify-center text-[11px] text-[var(--color-faint)]">Noch kein Urlaub erfasst</div>}
         {segs.map((s) => (
           <div key={s.id} title={s.label} className="absolute top-1.5 bottom-1.5 rounded-[3px]"
@@ -198,6 +199,8 @@ function YearTaken({ absences, color }: { absences: Absence[]; color: string }) 
               background: s.requested ? `color-mix(in srgb, ${color} 18%, white)` : color,
               border: s.requested ? `1px dashed ${color}` : 'none' }} />
         ))}
+        {/* Feiertags-Ticks NACH den Segmenten, damit sie auch über Urlaubsbalken sichtbar bleiben. */}
+        {holiMarks.map((l, i) => <div key={`h${i}`} className="absolute top-0 h-1.5 w-px z-[5] bg-[var(--color-faint)]" style={{ left: `${l}%` }} title="Feiertag" />)}
         {todayLeft >= 0 && <div className="absolute top-0 bottom-0 w-px z-10" style={{ left: `${todayLeft}%`, background: 'var(--color-info)' }} title="Heute" />}
       </div>
     </div>

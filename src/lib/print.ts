@@ -3,11 +3,12 @@ function resetPrintState() {
   document.querySelectorAll('.print-target').forEach((node) => {
     node.classList.remove('print-target')
   })
-  document.body.classList.remove('printing')
+  document.body.classList.remove('printing', 'print-portrait')
 }
 
-/** Druckt nur den übergebenen Bereich (Rest der Seite wird ausgeblendet). */
-export function printElement(el: HTMLElement | null) {
+/** Druckt nur den übergebenen Bereich (Rest der Seite wird ausgeblendet).
+   orientation='portrait' für Hochformat-Dokumente (Controlling, Pro Person). */
+export function printElement(el: HTMLElement | null, orientation: 'landscape' | 'portrait' = 'landscape') {
   if (!el) return
   // Falls ein vorheriger Druck nicht sauber aufgeräumt wurde (z. B. 'afterprint'
   // ist nicht gefeuert), zuerst evtl. hängende Markierungen entfernen.
@@ -15,6 +16,7 @@ export function printElement(el: HTMLElement | null) {
 
   el.classList.add('print-target')
   document.body.classList.add('printing')
+  if (orientation === 'portrait') document.body.classList.add('print-portrait')
 
   // matchMedia('print') als Fallback-Cleanup: feuert auch dann, wenn 'afterprint'
   // bei manchen Browsern/Abbrüchen ausbleibt.

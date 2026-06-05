@@ -130,7 +130,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<Account | null>(() => {
     try {
       const id = localStorage.getItem(SESSION_KEY)
-      const a = [...BASE, ...loadCustomAccounts()].find((x) => x.id === id)
+      const removed = new Set(loadRemovedBase())
+      // Session aus derselben Quelle wie records auflösen — gelöschte Zugänge
+      // werden NICHT wiederhergestellt.
+      const pool = [...BASE.filter((b) => !removed.has(b.id)), ...loadCustomAccounts()]
+      const a = pool.find((x) => x.id === id)
       return a ? strip(a) : null
     } catch { return null }
   })
@@ -139,6 +143,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try { localStorage.setItem(REMOVED_KEY, JSON.stringify(removedBase)) } catch { /* ignore */ }
   }, [removedBase])
+  // Falls der aktive Zugang inzwischen entfernt wurde → abmelden (kein Geisterzugang).
+  useEffect(() => {
+    if (account && !records.some((r) => r.id === account.id)) {
+      setAccount(null)
+      try { localStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
+    }
+  }, [records, account])
 
   const role: AccountRole | null = account?.role ?? null
   const perms = permsFor(role ?? 'employee')
@@ -196,6 +207,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Firmenadministratoren: nur Zugänge der eigenen Gesellschaft, keine Admin-Zugänge.
       if (!isAdmin && (target.role === 'admin' || !(target.companyId && scopeCompanies.includes(target.companyId)))) {
         return { ok: false, error: 'Außerhalb des Zuständigkeitsbereichs.' }
+      }
+      // Feste Demo-Zugänge nur durch Administratoren entfernbar (Wiederherstellen ist admin-only).
+      if (!isAdmin && !target.custom) {
+        return { ok: false, error: 'Feste Demo-Zugänge kann nur ein Administrator entfernen.' }
       }
       // Mindestens ein Administrator-Zugang muss bestehen bleiben.
       if (target.role === 'admin' && records.filter((a) => a.role === 'admin').length <= 1) {
