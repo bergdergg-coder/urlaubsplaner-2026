@@ -53,6 +53,8 @@ interface DataCtx {
   removeEmployee: (id: string) => void
   /** Import: legt fehlende Mitarbeiter an und ergänzt Urlaube (je Gesellschaft). */
   importVacations: (companyId: CompanyId, rows: { name: string; start: string; end: string; half?: boolean }[]) => { employeesAdded: number; absencesAdded: number }
+  /** Gesamten Datenbestand ersetzen (Wiederherstellung aus Sicherung; nur Admin). */
+  replaceAll: (employees: Employee[], absences: Absence[]) => { ok: boolean; error?: string }
 }
 
 const Ctx = createContext<DataCtx | null>(null)
@@ -280,6 +282,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (newEmps.length) setEmployees((prev) => [...prev, ...newEmps])
       if (newAbs.length) setAbsences((prev) => [...prev, ...newAbs])
       return { employeesAdded: newEmps.length, absencesAdded: newAbs.length }
+    },
+    replaceAll: (emps, abs) => {
+      // Globale Wiederherstellung — nur Administratoren.
+      if (!perms.configure) return { ok: false, error: 'Nur Administratoren dürfen den Bestand wiederherstellen.' }
+      const okEmps = Array.isArray(emps) && emps.every((e) => e && typeof e.id === 'string' && typeof e.name === 'string' && typeof e.companyId === 'string')
+      const okAbs = Array.isArray(abs) && abs.every((a) => a && typeof a.id === 'string' && typeof a.employeeId === 'string' && typeof a.start === 'string' && typeof a.end === 'string')
+      if (!okEmps || !okAbs) return { ok: false, error: 'Sicherungsdatei ungültig oder beschädigt.' }
+      setEmployees(emps)
+      setAbsences(abs)
+      return { ok: true }
     },
   }
 

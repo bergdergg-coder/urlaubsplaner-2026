@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, Check, X, UserPlus, Upload, FileDown, KeyRound, ShieldCheck } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, UserPlus, Upload, FileDown, KeyRound, ShieldCheck, Database, Download } from 'lucide-react'
 import { Card, Avatar, CountryFlag, Modal } from '../components/ui/ui'
 import { COMPANIES, COMPANY_MAP, DEPARTMENTS } from '../domain/seed'
 import { roleGroupLabelOf } from '../domain/roles'
@@ -100,6 +100,7 @@ export function Stammdaten() {
       </div>
 
       {perms.manageAccounts && <AccountsCard />}
+      {perms.configure && <BackupCard />}
 
       {dialog && (
         <EmployeeDialog emp={dialog.emp} scope={scopeCompanies} isSuper={isSuper}
@@ -484,5 +485,66 @@ function ImportDialog({ scope, isSuper, onClose }: { scope: CompanyId[]; isSuper
         </div>
       </div>
     </Modal>
+  )
+}
+
+/* ---- Datensicherung — Export/Import des gesamten Bestands (nur Admin) ------- */
+function BackupCard() {
+  const { employees, absences, replaceAll } = useData()
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  function exportAll() {
+    const payload = { format: 'ww-urlaubsplaner-backup', version: 1, exportedAt: new Date().toISOString(), employees, absences }
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadText(`Urlaubsplaner-Sicherung_${stamp}.json`, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8')
+    setMsg({ ok: true, text: `Sicherung erstellt: ${employees.length} Mitarbeiter · ${absences.length} Einträge.` })
+  }
+
+  async function importAll(file: File) {
+    setMsg(null)
+    try {
+      const data = JSON.parse(await file.text())
+      const emps = Array.isArray(data) ? data : data.employees
+      const abs = Array.isArray(data) ? [] : (data.absences ?? [])
+      const res = replaceAll(emps, abs)
+      setMsg(res.ok
+        ? { ok: true, text: `Wiederhergestellt: ${emps.length} Mitarbeiter · ${abs.length} Einträge.` }
+        : { ok: false, text: res.error ?? 'Wiederherstellung fehlgeschlagen.' })
+    } catch {
+      setMsg({ ok: false, text: 'Datei konnte nicht gelesen werden (erwartet: .json-Sicherung).' })
+    }
+  }
+
+  return (
+    <Card className="mt-5" pad={false}>
+      <div className="px-5 py-3 border-b border-[var(--color-line)] flex items-center gap-2">
+        <Database size={16} className="text-[var(--color-muted)]" />
+        <span className="text-[14px] font-semibold">Datensicherung</span>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        <p className="text-[12.5px] text-[var(--color-muted)]">
+          Sichert alle Mitarbeiter und Urlaube/Krankmeldungen als Datei und stellt sie wieder her.
+          Die Daten liegen sonst nur im Browser — mit einer Sicherung gehen sie nicht verloren.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={exportAll}
+            className="focusable inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-[var(--color-ink)] text-white text-[13px] font-semibold hover:opacity-90">
+            <Download size={15} /> Alle Daten sichern (JSON)
+          </button>
+          <label className="focusable inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-[var(--color-line)] text-[13px] font-medium hover:bg-[var(--color-line-soft)] cursor-pointer">
+            <Upload size={15} /> Aus Sicherung wiederherstellen
+            <input type="file" accept=".json,application/json" className="hidden"
+              onChange={(e) => { if (e.target.files?.[0]) importAll(e.target.files[0]); e.target.value = '' }} />
+          </label>
+        </div>
+        {msg && (
+          <div className="text-[12.5px] rounded-lg px-3 py-2 flex items-center gap-2"
+            style={{ background: msg.ok ? 'var(--color-ok-bg)' : 'var(--color-crit-bg)', color: msg.ok ? 'var(--color-ok)' : 'var(--color-crit)' }}>
+            {msg.ok ? <Check size={15} /> : <X size={15} />} {msg.text}
+          </div>
+        )}
+        <p className="text-[11px] text-[var(--color-faint)]">Wiederherstellen ersetzt den gesamten aktuellen Bestand. Zugänge/Logins sind nicht enthalten.</p>
+      </div>
+    </Card>
   )
 }
