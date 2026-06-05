@@ -186,6 +186,7 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
             <span key={co.id} className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: co.accent }} /> {co.name}</span>
           ))}
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm border-[1.5px] border-dashed bg-white border-[var(--color-faint)]" /> Antrag (offen)</span>
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--color-sick)' }} /> Krank</span>
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-faint)' }} /> Feiertag</span>
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--color-canvas)', boxShadow: 'inset 0 0 0 1px var(--color-line)' }} /> Wochenende</span>
           <span className="inline-flex items-center gap-1.5">Zahl rechts = Resturlaub</span>
@@ -281,18 +282,20 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                             const singleHalf = si === ei && a.halfDayStart
                             const w = singleHalf ? Math.max(8, Math.round(cell * 0.5)) : (ei - si + 1) * cell - 2
                             const requested = a.status === 'requested'
+                            const sick = a.type === 'sick'
+                            const label = sick ? 'Krank' : (requested ? 'Antrag' : 'Urlaub')
                             return (
                               <div key={a.id} role="button" tabIndex={0}
-                                aria-label={`${e.name}: ${requested ? 'Antrag' : 'Urlaub'} ${formatRangeDE(a.start, a.end)} – bearbeiten`}
-                                title={`${e.name} · ${company.name} · ${requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub')}\n${formatRangeDE(a.start, a.end)}\nKlick/Enter zum Bearbeiten`}
+                                aria-label={`${e.name}: ${label} ${formatRangeDE(a.start, a.end)} – bearbeiten`}
+                                title={`${e.name} · ${company.name} · ${sick ? 'Krankheit' : (requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub'))}\n${formatRangeDE(a.start, a.end)}\nKlick/Enter zum Bearbeiten`}
                                 onClick={(ev) => { ev.stopPropagation(); onEditAbsence(a) }}
                                 onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); onEditAbsence(a) } }}
                                 className="focusable absolute rounded-[5px] flex items-center px-1.5 overflow-hidden cursor-pointer group/bar"
                                 style={{ left: si * cell + 1, width: w, top: 5, height: 20,
-                                  background: requested ? `color-mix(in srgb, ${company.accent} 18%, white)` : company.accent,
-                                  border: requested ? `1.5px dashed ${company.accent}` : 'none',
-                                  color: requested ? `color-mix(in srgb, ${company.accent} 82%, black)` : company.accentText }}>
-                                {w > 40 && <span className="text-[10.5px] font-medium truncate">{a.halfDayStart ? '½ ' : ''}{requested ? 'Antrag' : 'Urlaub'}</span>}
+                                  background: sick ? 'var(--color-sick)' : (requested ? `color-mix(in srgb, ${company.accent} 18%, white)` : company.accent),
+                                  border: sick ? 'none' : (requested ? `1.5px dashed ${company.accent}` : 'none'),
+                                  color: sick ? '#fff' : (requested ? `color-mix(in srgb, ${company.accent} 82%, black)` : company.accentText) }}>
+                                {w > 40 && <span className="text-[10.5px] font-medium truncate">{a.halfDayStart ? '½ ' : ''}{label}</span>}
                                 <button onClick={(ev) => { ev.stopPropagation(); removeAbsence(a.id) }}
                                   className="focusable no-print ml-auto opacity-0 group-hover/bar:opacity-100 focus-visible:opacity-100 shrink-0 rounded p-0.5 transition-opacity hover:bg-black/20" title="Entfernen" aria-label={`Urlaub von ${e.name} entfernen`}><X size={11} /></button>
                               </div>

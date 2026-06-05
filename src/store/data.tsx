@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { Absence, CompanyId, Department, Employee } from '../domain/types'
+import type { Absence, AbsenceType, CompanyId, Department, Employee } from '../domain/types'
 import { ABSENCES, EMPLOYEES as SEED_EMPLOYEES } from '../domain/seed'
 import { TODAY } from '../lib/dates'
 import { useAuth } from './auth'
@@ -33,6 +33,8 @@ export interface AbsenceInput {
   halfDayStart?: boolean
   status?: 'requested' | 'approved'
   note?: string
+  /** Abwesenheitsart — Standard Urlaub; 'sick' = Krankheit (wird sofort erfasst). */
+  type?: AbsenceType
 }
 
 interface DataCtx {
@@ -151,13 +153,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     employeeMap,
     absences,
     addAbsence: (a) => {
-      // Mitarbeiter dürfen nur für sich selbst und ausschließlich als Antrag eintragen.
+      // Mitarbeiter dürfen nur für sich selbst eintragen.
       const employeeId = isEmployee && selfEmployeeId ? selfEmployeeId : a.employeeId
       if (!canTouch(employeeId)) return
-      const status = isEmployee ? 'requested' : (a.status ?? 'approved')
+      const type = a.type ?? 'vacation'
+      // Krankheit wird sofort erfasst (Krankmeldung, kein Genehmigungslauf);
+      // Urlaub von Mitarbeitern geht als Antrag, von Verwaltern direkt.
+      const status = type === 'sick' ? 'approved' : (isEmployee ? 'requested' : (a.status ?? 'approved'))
       const { start, end } = ordered(a.start, a.end)
       setAbsences((prev) => [...prev, {
-        id: uid('a'), employeeId, type: 'vacation', status,
+        id: uid('a'), employeeId, type, status,
         start, end, createdAt: TODAY,
         ...(a.halfDayStart ? { halfDayStart: true } : {}),
         ...(a.note?.trim() ? { note: a.note.trim() } : {}),
@@ -166,15 +171,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
     updateAbsence: (id, a) => {
       const existing = absences.find((x) => x.id === id)
       if (!existing || !canTouch(existing.employeeId)) return
-      // Mitarbeiter dürfen nur eigene, noch OFFENE Anträge ändern (nicht entschiedene).
-      if (isEmployee && existing.status !== 'requested') return
+      // Mitarbeiter dürfen eigene OFFENE Anträge und eigene Krankmeldungen ändern.
+      if (isEmployee && existing.type !== 'sick' && existing.status !== 'requested') return
       const employeeId = isEmployee && selfEmployeeId ? selfEmployeeId : a.employeeId
       if (!canTouch(employeeId)) return
       const { start, end } = ordered(a.start, a.end)
       setAbsences((prev) => prev.map((x) => {
         if (x.id !== id) return x
         const { halfDayStart: _h, note: _n, decidedBy, decidedAt, ...rest } = x
-        const status = isEmployee ? 'requested' : (a.status ?? x.status)
+        const status = x.type === 'sick' ? 'approved' : (isEmployee ? 'requested' : (a.status ?? x.status))
         // Bearbeiter-/Datums-Spur nur behalten, wenn der Status entschieden bleibt;
         // wird ein genehmigter Eintrag wieder zum Antrag, fällt sie weg.
         const keepDecision = status !== 'requested' && status === x.status
@@ -191,8 +196,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const t = prev.find((a) => a.id === id)
       if (!t) return prev
       if (!canTouch(t.employeeId)) return prev
-      // Mitarbeiter dürfen nur eigene, noch offene Anträge zurückziehen.
-      if (isEmployee && t.status !== 'requested') return prev
+      // Mitarbeiter dürfen eigene offene Anträge und eigene Krankmeldungen entfernen.
+      if (isEmployee && t.type !== 'sick' && t.status !== 'requested') return prev
       return prev.filter((a) => a.id !== id)
     }),
     approveAbsence: (id, decidedBy) => {

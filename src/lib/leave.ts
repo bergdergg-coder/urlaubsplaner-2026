@@ -74,7 +74,7 @@ function windowOf(e: Employee): { start: string; end: string } {
    So bleiben Anspruch (anteilig) und Verbrauch konsistent; Urlaube außerhalb (Altdaten,
    Import mit Fremdjahr, vor Eintritt/nach Austritt) zählen nicht ins Konto. */
 function windowedWorkdays(a: Absence, employee: Employee, capEnd?: string): number {
-  if (a.type !== 'vacation') return 0
+  // Art-unabhängig (Aufrufer filtern nach vacation/sick).
   const w = windowOf(employee)
   const lo = a.start < w.start ? w.start : a.start
   let hi = a.end > w.end ? w.end : a.end
@@ -109,6 +109,13 @@ export function effectiveEntitlement(e: Employee, year = YEAR): number {
 export function takenFor(employee: Employee, absences: Absence[]): number {
   return absences
     .filter((a) => a.employeeId === employee.id && a.type === 'vacation' && a.status === 'approved')
+    .reduce((s, a) => s + windowedWorkdays(a, employee), 0)
+}
+
+/** Krankheitstage (erfasste Krankmeldungen) eines Mitarbeiters im Planungsjahr. */
+export function sickDaysFor(employee: Employee, absences: Absence[]): number {
+  return absences
+    .filter((a) => a.employeeId === employee.id && a.type === 'sick')
     .reduce((s, a) => s + windowedWorkdays(a, employee), 0)
 }
 

@@ -104,7 +104,7 @@ export default function App() {
       <main className="flex-1">
         {effPage === 'plan' && (
           <Planner onCellClick={(employeeId, date) => setDraft({ employeeId, start: date, end: date })}
-            onEditAbsence={(a) => setDraft({ id: a.id, employeeId: a.employeeId, start: a.start, end: a.end, halfDay: !!a.halfDayStart, status: a.status === 'requested' ? 'requested' : 'approved', note: a.note })}
+            onEditAbsence={(a) => setDraft({ id: a.id, employeeId: a.employeeId, start: a.start, end: a.end, halfDay: !!a.halfDayStart, status: a.status === 'requested' ? 'requested' : 'approved', note: a.note, type: a.type })}
             mode={mode} setMode={setMode} month={month} setMonth={setMonth} filter={filter} setFilter={setFilter} />
         )}
         {effPage === 'uebersicht' && <Uebersicht onNewLeave={openNewLeave} />}
