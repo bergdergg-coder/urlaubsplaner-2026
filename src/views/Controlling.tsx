@@ -4,6 +4,7 @@ import logoUrl from '../assets/logo.png'
 import { Card, CountryFlag, BrandWave } from '../components/ui/ui'
 import type { Mode } from './Planner'
 import { COMPANIES } from '../domain/seed'
+import { ABSENCE_TYPE } from '../domain/absenceTypes'
 import { useData } from '../store/data'
 import { leaveAccount } from '../lib/leave'
 import { printElement } from '../lib/print'
@@ -32,6 +33,7 @@ export function Controlling({ onOpenPlan }: {
     const total = new Array(days.length).fill(0)
     for (const a of absences) {
       if (a.status === 'rejected') continue
+      if (ABSENCE_TYPE[a.type ?? 'vacation'].present) continue // Homeoffice/Schulung = verfügbar
       if (!employeeMap[a.employeeId]) continue
       const s = idx.get(a.start), e = idx.get(a.end)
       if (s == null || e == null) continue

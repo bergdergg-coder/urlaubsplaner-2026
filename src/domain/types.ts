@@ -81,6 +81,7 @@ export type AbsenceType =
   | 'vacation'    // Urlaub
   | 'sick'        // Krank
   | 'homeoffice'  // Homeoffice (anwesend, aber markiert)
+  | 'special'     // Sonderurlaub (bezahlte Freistellung, extra)
   | 'training'    // Schulung / Fortbildung
   | 'assembly'    // Montage / Außeneinsatz
   | 'other'       // Sonstiges

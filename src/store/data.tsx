@@ -159,9 +159,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const employeeId = isEmployee && selfEmployeeId ? selfEmployeeId : a.employeeId
       if (!canTouch(employeeId)) return
       const type = a.type ?? 'vacation'
-      // Krankheit wird sofort erfasst (Krankmeldung, kein Genehmigungslauf);
-      // Urlaub von Mitarbeitern geht als Antrag, von Verwaltern direkt.
-      const status = type === 'sick' ? 'approved' : (isEmployee ? 'requested' : (a.status ?? 'approved'))
+      // Nur Urlaub durchläuft den Antrags-/Freigabelauf; alle anderen Arten
+      // (Krank, Homeoffice, Sonderurlaub …) werden direkt erfasst.
+      const status = type !== 'vacation' ? 'approved' : (isEmployee ? 'requested' : (a.status ?? 'approved'))
       const { start, end } = ordered(a.start, a.end)
       setAbsences((prev) => [...prev, {
         id: uid('a'), employeeId, type, status,
@@ -173,15 +173,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     updateAbsence: (id, a) => {
       const existing = absences.find((x) => x.id === id)
       if (!existing || !canTouch(existing.employeeId)) return
-      // Mitarbeiter dürfen eigene OFFENE Anträge und eigene Krankmeldungen ändern.
-      if (isEmployee && existing.type !== 'sick' && existing.status !== 'requested') return
+      // Mitarbeiter dürfen eigene OFFENE Urlaubs-Anträge und eigene direkt erfassten
+      // Einträge (Krank/Homeoffice/Sonderurlaub) ändern — nicht entschiedene Urlaube.
+      if (isEmployee && existing.type === 'vacation' && existing.status !== 'requested') return
       const employeeId = isEmployee && selfEmployeeId ? selfEmployeeId : a.employeeId
       if (!canTouch(employeeId)) return
       const { start, end } = ordered(a.start, a.end)
       setAbsences((prev) => prev.map((x) => {
         if (x.id !== id) return x
         const { halfDayStart: _h, note: _n, decidedBy, decidedAt, ...rest } = x
-        const status = x.type === 'sick' ? 'approved' : (isEmployee ? 'requested' : (a.status ?? x.status))
+        const status = x.type !== 'vacation' ? 'approved' : (isEmployee ? 'requested' : (a.status ?? x.status))
         // Bearbeiter-/Datums-Spur nur behalten, wenn der Status entschieden bleibt;
         // wird ein genehmigter Eintrag wieder zum Antrag, fällt sie weg.
         const keepDecision = status !== 'requested' && status === x.status
@@ -198,8 +199,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const t = prev.find((a) => a.id === id)
       if (!t) return prev
       if (!canTouch(t.employeeId)) return prev
-      // Mitarbeiter dürfen eigene offene Anträge und eigene Krankmeldungen entfernen.
-      if (isEmployee && t.type !== 'sick' && t.status !== 'requested') return prev
+      // Mitarbeiter dürfen eigene offene Urlaubs-Anträge und eigene direkt erfassten Einträge entfernen.
+      if (isEmployee && t.type === 'vacation' && t.status !== 'requested') return prev
       return prev.filter((a) => a.id !== id)
     }),
     approveAbsence: (id, decidedBy) => {

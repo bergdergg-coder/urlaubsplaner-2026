@@ -1,10 +1,15 @@
 import { useState } from 'react'
-import { Trash2, CalendarRange, Thermometer } from 'lucide-react'
+import { Trash2, CalendarRange, Thermometer, Home, Star } from 'lucide-react'
 import { Avatar, Modal, CountryFlag } from './ui/ui'
 import { COMPANIES, COMPANY_MAP } from '../domain/seed'
+import { ABSENCE_TYPE, SELECTABLE_TYPES } from '../domain/absenceTypes'
 import { useData } from '../store/data'
 import { useAuth } from '../store/auth'
 import type { AbsenceType } from '../domain/types'
+
+const TYPE_ICON: Partial<Record<AbsenceType, typeof CalendarRange>> = {
+  vacation: CalendarRange, sick: Thermometer, homeoffice: Home, special: Star,
+}
 import { YEAR_START, YEAR_END, formatRangeDE } from '../lib/dates'
 import { leaveAccount, regionOf, workdaysInRange, workdaysOf } from '../lib/leave'
 
@@ -24,7 +29,8 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
   const [status, setStatus] = useState<'approved' | 'requested'>(
     isEmployee ? 'requested' : (draft.status ?? 'approved'),
   )
-  const isSick = type === 'sick'
+  const meta = ABSENCE_TYPE[type]
+  const notVacation = type !== 'vacation'
 
   const e = employeeMap[employeeId]
   if (!e) return null
@@ -50,8 +56,7 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
     onClose()
   }
 
-  const what = isSick ? 'Krankheit' : 'Urlaub'
-  const title = isEdit ? `${what} bearbeiten` : (isSick ? 'Krankheit eintragen' : (isEmployee ? 'Urlaub beantragen' : 'Urlaub eintragen'))
+  const title = isEdit ? `${meta.label} bearbeiten` : (notVacation ? `${meta.label} eintragen` : (isEmployee ? 'Urlaub beantragen' : 'Urlaub eintragen'))
 
   return (
     <Modal open onClose={onClose} title={title} width={500}>
@@ -79,14 +84,17 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
           </div>
         </div>
 
-        {/* Art: Urlaub oder Krankheit (Krankmeldung wird ohne Freigabe erfasst). */}
-        <div className="inline-flex p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)]">
-          {([['vacation', 'Urlaub', CalendarRange], ['sick', 'Krankheit', Thermometer]] as const).map(([v, l, Icon]) => (
-            <button key={v} type="button" onClick={() => setType(v)} aria-pressed={type === v}
-              className={`focusable inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors ${type === v ? 'bg-white shadow-sm text-[var(--color-ink)]' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'}`}>
-              <Icon size={14} /> {l}
-            </button>
-          ))}
+        {/* Abwesenheitsart — nur Urlaub durchläuft die Freigabe, der Rest wird direkt erfasst. */}
+        <div className="flex flex-wrap gap-0.5 p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)]">
+          {SELECTABLE_TYPES.map((v) => {
+            const Icon = TYPE_ICON[v] ?? CalendarRange
+            return (
+              <button key={v} type="button" onClick={() => setType(v)} aria-pressed={type === v}
+                className={`focusable inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] font-medium rounded-md transition-colors ${type === v ? 'bg-white shadow-sm text-[var(--color-ink)]' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'}`}>
+                <Icon size={14} /> {ABSENCE_TYPE[v].label}
+              </button>
+            )
+          })}
         </div>
 
         <div className={`grid gap-3 ${halfDay ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -114,8 +122,8 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
             className="w-full px-3 py-2 rounded-lg border border-[var(--color-line)] bg-white text-[14px] focusable resize-none" />
         </div>
 
-        {/* Direkt genehmigen nur für Verwalter bei URLAUB; Krankheit wird ohne Freigabe erfasst. */}
-        {isManager && !isSick && (
+        {/* Direkt genehmigen nur für Verwalter bei URLAUB; andere Arten werden direkt erfasst. */}
+        {isManager && !notVacation && (
           <div>
             <div className="text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Eintragsart</div>
             <div className="inline-flex p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)]">
@@ -130,12 +138,12 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
 
         <div className="flex items-center justify-between gap-2 text-[12.5px] bg-[var(--color-canvas)] rounded-lg px-3 py-2">
           <span className="text-[var(--color-muted)]">{halfDay ? `${formatRangeDE(lo, lo)} · ½ Tag` : formatRangeDE(lo, hi)}</span>
-          <span className="tnum font-semibold" style={{ color: days === 0 ? 'var(--color-warn)' : 'var(--color-ink)' }}>{days} {isSick ? 'Krankheitstag' : 'Urlaubstag'}{days === 1 ? '' : 'e'}</span>
+          <span className="tnum font-semibold" style={{ color: days === 0 ? 'var(--color-warn)' : 'var(--color-ink)' }}>{days} {notVacation ? 'Tag' : 'Urlaubstag'}{days === 1 ? '' : 'e'}</span>
         </div>
         {days === 0 ? (
           <div className="text-[11.5px] text-[var(--color-warn)] -mt-2 px-1">Im gewählten Zeitraum liegen keine Arbeitstage (nur Wochenende/Feiertage).</div>
-        ) : isSick ? (
-          <div className="text-[11.5px] text-[var(--color-muted)] -mt-2 px-1">Krankheit wird sofort erfasst und zählt nicht gegen den Urlaubsanspruch.</div>
+        ) : notVacation ? (
+          <div className="text-[11.5px] text-[var(--color-muted)] -mt-2 px-1">{meta.label} wird direkt erfasst und zählt nicht gegen den Urlaubsanspruch.</div>
         ) : (
           <div className="text-[11.5px] text-[var(--color-muted)] -mt-2 px-1">
             Resturlaub {e.name.split(' ')[0]}: {acct.remainingIfApproved} → <span className={projectedRemaining < 0 ? 'text-[var(--color-crit)] font-semibold' : 'font-semibold text-[var(--color-ink-soft)]'}>{projectedRemaining}</span> Tage
@@ -156,7 +164,7 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
             <button onClick={onClose} className="focusable h-10 px-4 rounded-lg text-[13px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-line-soft)]">Abbrechen</button>
             <button onClick={save} disabled={!start || (!halfDay && !end) || days === 0}
               className="focusable h-10 px-5 rounded-lg bg-[var(--color-ww-red)] text-white text-[13px] font-semibold hover:bg-[var(--color-ww-red-600)] disabled:opacity-40 disabled:cursor-not-allowed">
-              {isEdit ? 'Speichern' : (isSick ? 'Krank eintragen' : (status === 'requested' ? 'Antrag stellen' : 'Eintragen'))}
+              {isEdit ? 'Speichern' : (notVacation ? `${meta.label} eintragen` : (status === 'requested' ? 'Antrag stellen' : 'Eintragen'))}
             </button>
           </div>
         </div>

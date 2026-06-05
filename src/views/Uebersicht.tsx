@@ -5,7 +5,8 @@ import { COMPANIES, COMPANY_MAP } from '../domain/seed'
 import { roleGroupLabelOf } from '../domain/roles'
 import { useData } from '../store/data'
 import { useAuth } from '../store/auth'
-import { leaveAccount, absenceDays, sickDaysFor } from '../lib/leave'
+import { leaveAccount, absenceDays } from '../lib/leave'
+import { ABSENCE_TYPE } from '../domain/absenceTypes'
 import { formatRangeDE, formatDE, WEEKDAYS_SHORT_DE, MONTHS_SHORT_DE, yearDays, daysBetweenInclusive, iso, YEAR, YEAR_START, YEAR_END, TODAY } from '../lib/dates'
 import { holidayFor } from '../domain/holidays'
 import type { Absence, HolidayRegion } from '../domain/types'
@@ -32,13 +33,16 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
   }
   const c = COMPANY_MAP[e.companyId]
   const acct = leaveAccount(e, absences)
-  const sickDays = sickDaysFor(e, absences)
 
-  // Urlaube + Krankmeldungen der Person (für die Liste); der Jahresverlauf nur Urlaub.
+  // Alle Abwesenheiten der Person (für die Liste); der Jahresverlauf nur Urlaub.
   const mine = absences
-    .filter((a) => a.employeeId === e.id && (a.type === 'vacation' || a.type === 'sick'))
+    .filter((a) => a.employeeId === e.id)
     .sort((a, b) => a.start.localeCompare(b.start))
   const myVacations = mine.filter((a) => a.type === 'vacation')
+  // Tage je Nicht-Urlaubs-Art (für die Übersichts-Badges).
+  const typeCounts = (['sick', 'homeoffice', 'special'] as const)
+    .map((t) => ({ t, n: mine.filter((a) => a.type === t).reduce((s, a) => s + absenceDays(a, e), 0) }))
+    .filter((x) => x.n > 0)
 
   const tiles: { label: string; value: string | number; sub?: string; tone?: 'accent' | 'ok' | 'warn' | 'crit' }[] = [
     { label: 'Jahresurlaub', value: acct.entitlementEffective, sub: acct.entitlementEffective !== acct.entitlement ? `anteilig von ${acct.entitlement}` : undefined },
@@ -143,10 +147,12 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
           <YearTaken absences={myVacations} color={c.accent} region={c.holidayRegion} />
         </div>
 
-        {/* Urlaubs-/Krankheits-/Antragsliste */}
+        {/* Abwesenheiten & Anträge */}
         <h3 className="text-[14px] font-semibold mb-2 flex items-center gap-1.5 flex-wrap">
-          <CalendarRange size={16} className="text-[var(--color-muted)]" /> Urlaube, Krankheit &amp; Anträge {YEAR}
-          {sickDays > 0 && <span className="text-[11.5px] font-medium px-2 py-0.5 rounded-full" style={{ background: 'var(--color-sick-bg)', color: 'var(--color-sick)' }}>{sickDays} Krankheitstag{sickDays === 1 ? '' : 'e'}</span>}
+          <CalendarRange size={16} className="text-[var(--color-muted)]" /> Abwesenheiten &amp; Anträge {YEAR}
+          {typeCounts.map(({ t, n }) => (
+            <span key={t} className="text-[11.5px] font-medium px-2 py-0.5 rounded-full" style={{ background: ABSENCE_TYPE[t].bg, color: ABSENCE_TYPE[t].color }}>{n} Tag{n === 1 ? '' : 'e'} {ABSENCE_TYPE[t].label}</span>
+          ))}
         </h3>
         {mine.length === 0 ? (
           <div className="text-[13px] text-[var(--color-muted)] py-4">Noch keine Urlaube oder Anträge erfasst.</div>
@@ -154,19 +160,21 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
           <div className="border border-[var(--color-line)] rounded-xl overflow-hidden divide-y divide-[var(--color-line-soft)]">
             {mine.map((a) => {
               const days = absenceDays(a, e)
-              const sick = a.type === 'sick'
+              const at = a.type ?? 'vacation'
+              const isVac = at === 'vacation'
+              const tm = ABSENCE_TYPE[at]
               return (
                 <div key={a.id} className="px-3.5 py-2.5 flex items-center gap-3 text-[13px]">
-                  {sick && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--color-sick)' }} title="Krankheit" />}
+                  {!isVac && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: tm.color }} title={tm.label} />}
                   <div className="flex-1 min-w-0">
                     <div className="font-medium">{a.halfDayStart ? '½ Tag · ' : ''}{formatRangeDE(a.start, a.end)}</div>
                     {a.note && <div className="text-[12px] text-[var(--color-muted)] italic truncate">{a.note}</div>}
                     {a.decidedBy && <div className="text-[11px] text-[var(--color-faint)]">Bearbeitet von {a.decidedBy}{a.decidedAt ? ` · ${formatDE(a.decidedAt, { year: false })}` : ''}</div>}
                   </div>
                   <span className="tnum text-[var(--color-muted)] shrink-0">{days} Tag{days === 1 ? '' : 'e'}</span>
-                  {sick
-                    ? <span className="inline-flex items-center text-[11.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: 'var(--color-sick-bg)', color: 'var(--color-sick)' }}>Krank</span>
-                    : <StatusBadge status={a.status} />}
+                  {isVac
+                    ? <StatusBadge status={a.status} />
+                    : <span className="inline-flex items-center text-[11.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: tm.bg, color: tm.color }}>{tm.label}</span>}
                 </div>
               )
             })}

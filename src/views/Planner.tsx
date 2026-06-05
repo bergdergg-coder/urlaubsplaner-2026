@@ -4,6 +4,7 @@ import { CountryFlag, PrintHeader } from '../components/ui/ui'
 import { OutlookExportDialog } from '../components/OutlookExportDialog'
 import type { Absence, CompanyId } from '../domain/types'
 import { COMPANIES } from '../domain/seed'
+import { ABSENCE_TYPE } from '../domain/absenceTypes'
 import { useData } from '../store/data'
 import { useAuth } from '../store/auth'
 import { leaveAccount } from '../lib/leave'
@@ -55,9 +56,10 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
     const companyIds = new Set(visibleCompanies.map((c) => c.id))
     return new Set(employees.filter((e) => companyIds.has(e.companyId)).map((e) => e.id))
   }, [visibleCompanies, employees])
-  const todayCount = absences.filter((a) => a.status !== 'rejected' && visibleEmpIds.has(a.employeeId) && a.start <= TODAY && a.end >= TODAY).length
+  const isAway = (a: Absence) => a.status !== 'rejected' && !ABSENCE_TYPE[a.type ?? 'vacation'].present
+  const todayCount = absences.filter((a) => isAway(a) && visibleEmpIds.has(a.employeeId) && a.start <= TODAY && a.end >= TODAY).length
   const awayCount = useMemo(() => visibleDays.map((d) =>
-    absences.filter((a) => a.status !== 'rejected' && visibleEmpIds.has(a.employeeId) && a.start <= d && a.end >= d).length), [visibleDays, absences, visibleEmpIds])
+    absences.filter((a) => a.status !== 'rejected' && !ABSENCE_TYPE[a.type ?? 'vacation'].present && visibleEmpIds.has(a.employeeId) && a.start <= d && a.end >= d).length), [visibleDays, absences, visibleEmpIds])
 
   const offset = weekdayMon0(firstDay)
   const weekendStyle: CSSProperties = {
@@ -186,7 +188,9 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
             <span key={co.id} className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: co.accent }} /> {co.name}</span>
           ))}
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm border-[1.5px] border-dashed bg-white border-[var(--color-faint)]" /> Antrag (offen)</span>
-          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--color-sick)' }} /> Krank</span>
+          {(['sick', 'homeoffice', 'special'] as const).map((t) => (
+            <span key={t} className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: ABSENCE_TYPE[t].color }} /> {ABSENCE_TYPE[t].short}</span>
+          ))}
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-faint)' }} /> Feiertag</span>
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--color-canvas)', boxShadow: 'inset 0 0 0 1px var(--color-line)' }} /> Wochenende</span>
           <span className="inline-flex items-center gap-1.5">Zahl rechts = Resturlaub</span>
@@ -282,19 +286,21 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                             const singleHalf = si === ei && a.halfDayStart
                             const w = singleHalf ? Math.max(8, Math.round(cell * 0.5)) : (ei - si + 1) * cell - 2
                             const requested = a.status === 'requested'
-                            const sick = a.type === 'sick'
-                            const label = sick ? 'Krank' : (requested ? 'Antrag' : 'Urlaub')
+                            const at = a.type ?? 'vacation'
+                            const isVac = at === 'vacation'
+                            const tm = ABSENCE_TYPE[at]
+                            const label = isVac ? (requested ? 'Antrag' : 'Urlaub') : tm.short
                             return (
                               <div key={a.id} role="button" tabIndex={0}
                                 aria-label={`${e.name}: ${label} ${formatRangeDE(a.start, a.end)} – bearbeiten`}
-                                title={`${e.name} · ${company.name} · ${sick ? 'Krankheit' : (requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub'))}\n${formatRangeDE(a.start, a.end)}\nKlick/Enter zum Bearbeiten`}
+                                title={`${e.name} · ${company.name} · ${isVac ? (requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub')) : tm.label}\n${formatRangeDE(a.start, a.end)}\nKlick/Enter zum Bearbeiten`}
                                 onClick={(ev) => { ev.stopPropagation(); onEditAbsence(a) }}
                                 onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); onEditAbsence(a) } }}
                                 className="focusable absolute rounded-[5px] flex items-center px-1.5 overflow-hidden cursor-pointer group/bar"
                                 style={{ left: si * cell + 1, width: w, top: 5, height: 20,
-                                  background: sick ? 'var(--color-sick)' : (requested ? `color-mix(in srgb, ${company.accent} 18%, white)` : company.accent),
-                                  border: sick ? 'none' : (requested ? `1.5px dashed ${company.accent}` : 'none'),
-                                  color: sick ? '#fff' : (requested ? `color-mix(in srgb, ${company.accent} 82%, black)` : company.accentText) }}>
+                                  background: !isVac ? tm.color : (requested ? `color-mix(in srgb, ${company.accent} 18%, white)` : company.accent),
+                                  border: (isVac && requested) ? `1.5px dashed ${company.accent}` : 'none',
+                                  color: !isVac ? '#fff' : (requested ? `color-mix(in srgb, ${company.accent} 82%, black)` : company.accentText) }}>
                                 {w > 40 && <span className="text-[10.5px] font-medium truncate">{a.halfDayStart ? '½ ' : ''}{label}</span>}
                                 <button onClick={(ev) => { ev.stopPropagation(); removeAbsence(a.id) }}
                                   className="focusable no-print ml-auto opacity-0 group-hover/bar:opacity-100 focus-visible:opacity-100 shrink-0 rounded p-0.5 transition-opacity hover:bg-black/20" title="Entfernen" aria-label={`Urlaub von ${e.name} entfernen`}><X size={11} /></button>

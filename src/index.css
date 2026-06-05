@@ -32,9 +32,13 @@
   --color-crit-bg: #fde3e4;
   --color-info: #2563eb;
   --color-info-bg: #e6effe;
-  /* Krankheit (eigene Abwesenheitsart, firmenunabhängig) */
+  /* Abwesenheitsarten (firmenunabhängig) */
   --color-sick: #7c5cd6;
   --color-sick-bg: #ece7fb;
+  --color-ho: #0e8fd0;        /* Homeoffice */
+  --color-ho-bg: #e1f1fb;
+  --color-special: #0d9488;   /* Sonderurlaub */
+  --color-special-bg: #d8f1ed;
 
   /* Gesellschaftsakzente — Vorgabe Würzburger Gruppe:
      WGV = Orange · Würzburger AG = Rot · Würzburger GmbH = Hellgrün.
