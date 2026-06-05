@@ -179,8 +179,8 @@ function EmployeeDialog({ emp, scope, isSuper, onClose, onSave }: {
           </div>
           <div>
             <label htmlFor="emp-carry" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Resturlaub Vorjahr</label>
-            <input id="emp-carry" type="number" min={0} max={60} className={field} value={carryover}
-              onChange={(e) => setCarryover(Math.min(60, Math.max(0, Number(e.target.value) || 0)))} />
+            <input id="emp-carry" type="number" min={-60} max={60} step={0.5} className={field} value={carryover}
+              onChange={(e) => setCarryover(Math.min(60, Math.max(-60, Number(e.target.value) || 0)))} />
           </div>
         </div>
 

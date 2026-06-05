@@ -57,19 +57,19 @@ type Mini = {
   /** Austritt (ISO) — anteiliger Anspruch. */ exit?: string
 }
 const RAW: Mini[] = [
-  // WGV — Holding / gruppenweite Verwaltung (DE)
-  { id: 'wolfgang-w', name: 'Wolfgang Würzburger', companyId: 'WGV', jobTitle: 'Geschäftsführender Gesellschafter', department: 'Geschäftsführung', role: 'admin', key: true, mgmt: true, deputies: ['susanne-w'], carry: 8 },
-  { id: 'susanne-w', name: 'Susanne Würzburger', companyId: 'WGV', jobTitle: 'Leitung Verwaltung', department: 'Geschäftsführung', role: 'company_manager', key: true, mgmt: true, deputies: ['wolfgang-w'], carry: 5 },
-  { id: 'rebecca-w', name: 'Rebecca Würzburger', companyId: 'WGV', jobTitle: 'Assistenz der GF', department: 'Verwaltung', carry: 3 },
-  { id: 'nadja-p', name: 'Nadja Pereira', companyId: 'WGV', jobTitle: 'Leitung Buchhaltung', department: 'Buchhaltung / Lohn', key: true, deputies: ['lirije-r'], carry: 4 },
-  { id: 'eric-d', name: 'Eric Dijkhof', companyId: 'WGV', jobTitle: 'Leitung IT (Gruppe)', department: 'IT', role: 'admin', key: true, deputies: ['andreas-s'], carry: 6 },
-  { id: 'wolfgang-m', name: 'Wolfgang Müller', companyId: 'WGV', jobTitle: 'Disposition', department: 'Disposition', key: true, deputies: ['viktor-h', 'andreas-s'] },
-  { id: 'sascha-e', name: 'Sascha Eichin', companyId: 'WGV', jobTitle: 'Vertrieb', department: 'Vertrieb' },
-  // Teilzeit: arbeitet Mo–Mi (3-Tage-Woche), Anspruch entsprechend 18 Tage.
-  { id: 'lirije-r', name: 'Lirije Ramqaj', companyId: 'WGV', jobTitle: 'Lohnbuchhaltung (Teilzeit)', department: 'Buchhaltung / Lohn', deputies: ['nadja-p'], ent: 18, workdays: [0, 1, 2] },
-  // Austritt unterjährig zum 30.09. → anteiliger Anspruch.
-  { id: 'viktor-h', name: 'Viktor Hehn', companyId: 'WGV', jobTitle: 'Sachbearbeitung', department: 'Verwaltung', exit: '2026-09-30' },
-  { id: 'andreas-s', name: 'Andreas Schneider', companyId: 'WGV', jobTitle: 'IT-Administration', department: 'IT', deputies: ['eric-d'] },
+  // WGV — Holding / gruppenweite Verwaltung (DE). Jahresanspruch 28 Tage (7h/Tag).
+  // Resturlaub 2025 (carry) und Urlaube 01.01.–05.06.26 aus WGV-Aufstellung.
+  { id: 'wolfgang-w', name: 'Wolfgang Würzburger', companyId: 'WGV', jobTitle: 'Geschäftsführender Gesellschafter', department: 'Geschäftsführung', role: 'admin', key: true, mgmt: true, deputies: ['susanne-w'], ent: 28, carry: 8 },
+  { id: 'susanne-w', name: 'Susanne Würzburger', companyId: 'WGV', jobTitle: 'Leitung Verwaltung', department: 'Geschäftsführung', role: 'company_manager', key: true, mgmt: true, deputies: ['wolfgang-w'], ent: 28, carry: 5 },
+  { id: 'rebecca-w', name: 'Rebecca Würzburger', companyId: 'WGV', jobTitle: 'Assistenz der GF', department: 'Verwaltung', ent: 28, carry: -3 },
+  { id: 'nadja-p', name: 'Nadja Pereira', companyId: 'WGV', jobTitle: 'Leitung Buchhaltung', department: 'Buchhaltung / Lohn', key: true, deputies: ['lirije-r'], ent: 28, carry: 5 },
+  { id: 'eric-d', name: 'Eric Dijkhof', companyId: 'WGV', jobTitle: 'Leitung IT (Gruppe)', department: 'IT', role: 'admin', key: true, deputies: ['andreas-s'], ent: 28, carry: 7.5 },
+  { id: 'wolfgang-m', name: 'Wolfgang Müller', companyId: 'WGV', jobTitle: 'Disposition', department: 'Disposition', key: true, deputies: ['viktor-h', 'andreas-s'], ent: 28, carry: -4 },
+  { id: 'sascha-e', name: 'Sascha Eichin', companyId: 'WGV', jobTitle: 'Vertrieb', department: 'Vertrieb', ent: 28, carry: 8.5 },
+  { id: 'lirije-r', name: 'Lirije Ramqaj', companyId: 'WGV', jobTitle: 'Lohnbuchhaltung', department: 'Buchhaltung / Lohn', deputies: ['nadja-p'], ent: 28 },
+  // Viktor wird betrieblich in STUNDEN geführt (196 h = 28 Tage à 7 h); Übertrag 80,75 h ≈ 11,5 Tage.
+  { id: 'viktor-h', name: 'Viktor Hehn', companyId: 'WGV', jobTitle: 'Sachbearbeitung', department: 'Verwaltung', ent: 28, carry: 11.5 },
+  { id: 'andreas-s', name: 'Andreas Schneider', companyId: 'WGV', jobTitle: 'IT-Administration', department: 'IT', deputies: ['eric-d'], ent: 28, carry: 18.5 },
 
   // Würzburger AG — Schweiz (CH)
   { id: 'carina-s', name: 'Carina Schwandt', companyId: 'AG', jobTitle: 'Verwaltungsratspräsidentin', department: 'Geschäftsführung', role: 'company_manager', key: true, mgmt: true, deputies: ['jochen-s'] },
@@ -128,12 +128,52 @@ const U = (employeeId: string, start: string, end: string, note?: string): Absen
   id: `a${++_n}`, employeeId, type: 'vacation', status: 'approved', start, end,
   createdAt: iso(2026, 1, 15), ...(note ? { note } : {}),
 })
+/** Einzelner Halbtag (0,5 Urlaubstag). */
+const UH = (employeeId: string, date: string): Absence => ({
+  id: `a${++_n}`, employeeId, type: 'vacation', status: 'approved', start: date, end: date,
+  halfDayStart: true, createdAt: iso(2026, 1, 15),
+})
 
 export const ABSENCES: Absence[] = [
-  // Jahresanfang — beeinflusst den Resturlaub-Verfall (Stichtag 31.03.):
-  U('nadja-p', iso(2026, 3, 23), iso(2026, 3, 27)),   // 5 Tage → Übertrag (4) voll genutzt, kein Verfall
-  U('wolfgang-w', iso(2026, 2, 9), iso(2026, 2, 13)), // 5 Tage → von 8 Übertrag bleiben 3 → verfallen
-  U('eric-d', iso(2026, 1, 12), iso(2026, 1, 16)),    // 5 Tage → von 6 Übertrag bleibt 1 → verfällt
+  // ==== WGV — Urlaube 01.01.–05.06.26 (reale Aufstellung; Halbtage via UH) ====
+  U('eric-d', iso(2026, 1, 2), iso(2026, 1, 5)),
+  U('eric-d', iso(2026, 3, 6), iso(2026, 3, 6)),
+  U('eric-d', iso(2026, 3, 27), iso(2026, 3, 27)),
+  U('eric-d', iso(2026, 4, 22), iso(2026, 4, 27)),
+  U('eric-d', iso(2026, 5, 15), iso(2026, 5, 15)),
+  U('andreas-s', iso(2026, 1, 2), iso(2026, 1, 5)),
+  U('andreas-s', iso(2026, 1, 23), iso(2026, 1, 23)),
+  U('andreas-s', iso(2026, 3, 6), iso(2026, 3, 6)),
+  U('andreas-s', iso(2026, 3, 27), iso(2026, 3, 27)),
+  U('andreas-s', iso(2026, 5, 15), iso(2026, 5, 15)),
+  U('wolfgang-m', iso(2026, 3, 2), iso(2026, 3, 2)),
+  U('wolfgang-m', iso(2026, 3, 30), iso(2026, 4, 2)),
+  U('wolfgang-m', iso(2026, 5, 11), iso(2026, 5, 15)),
+  U('wolfgang-m', iso(2026, 5, 29), iso(2026, 5, 29)),
+  U('wolfgang-m', iso(2026, 6, 5), iso(2026, 6, 5)),
+  U('viktor-h', iso(2026, 2, 11), iso(2026, 2, 12)),
+  U('viktor-h', iso(2026, 2, 18), iso(2026, 2, 18)),
+  U('viktor-h', iso(2026, 3, 5), iso(2026, 3, 5)),
+  U('viktor-h', iso(2026, 4, 1), iso(2026, 4, 1)),
+  U('viktor-h', iso(2026, 5, 15), iso(2026, 5, 15)),
+  U('viktor-h', iso(2026, 6, 5), iso(2026, 6, 5)),
+  U('sascha-e', iso(2026, 1, 13), iso(2026, 1, 13)),
+  U('sascha-e', iso(2026, 2, 3), iso(2026, 2, 3)),
+  U('sascha-e', iso(2026, 2, 27), iso(2026, 2, 27)),
+  UH('sascha-e', iso(2026, 4, 1)),
+  U('sascha-e', iso(2026, 4, 20), iso(2026, 4, 20)),
+  U('sascha-e', iso(2026, 5, 15), iso(2026, 5, 15)),
+  U('nadja-p', iso(2026, 1, 2), iso(2026, 1, 5)),
+  U('nadja-p', iso(2026, 4, 7), iso(2026, 4, 9)),
+  U('nadja-p', iso(2026, 4, 13), iso(2026, 4, 17)),
+  U('rebecca-w', iso(2026, 2, 6), iso(2026, 2, 6)),
+  U('rebecca-w', iso(2026, 2, 23), iso(2026, 2, 27)),
+  U('rebecca-w', iso(2026, 3, 26), iso(2026, 3, 27)),
+  UH('rebecca-w', iso(2026, 5, 15)),
+  UH('rebecca-w', iso(2026, 5, 22)),
+  U('lirije-r', iso(2026, 6, 19), iso(2026, 6, 26)),
+
+  // bestehende WGV-Einträge (ab Juni):
   U('eric-d', iso(2026, 6, 10), iso(2026, 6, 15)),
   U('viktor-h', iso(2026, 7, 6), iso(2026, 7, 17)),
   U('rebecca-w', iso(2026, 6, 19), iso(2026, 6, 19)),

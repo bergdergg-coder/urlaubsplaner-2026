@@ -10,7 +10,7 @@ import { useAuth } from './auth'
 
 // Version im Schlüssel: bei Datenstand-Updates hochzählen, damit neue Stammdaten/
 // Urlaube auch bei Nutzern mit altem Browser-Speicher geladen werden.
-const STORAGE_KEY = 'ww-urlaubsplaner-2026-v4'
+const STORAGE_KEY = 'ww-urlaubsplaner-2026-v5'
 
 export interface EmployeeInput {
   name: string
