@@ -142,7 +142,13 @@ nur im Druck/PDF sichtbar. Druck über den jeweiligen „Drucken"-Button (A4 que
 
 ---
 
-## 8. Tests ([`npm test`](package.json) — Vitest, 62 Tests)
+## 8. Tests ([`npm test`](package.json) — Vitest, 73 Tests)
+
+> Urlaube werden in der **Firmenfarbe** dargestellt (WGV orange, AG rot, GmbH grün);
+> „Pro Person" zeigt den **genommenen Urlaub im Jahresverlauf**. Nach einem 55-Agenten-Audit
+> sind u. a. Import-Datumslogik, Beschäftigungsfenster-Begrenzung, Druck-Skalierung,
+> Error-Boundary, Tastatur-/Kontrast-A11y und Modal-Fokus gehärtet.
+
 
 - [`src/lib/leave.test.ts`](src/lib/leave.test.ts) — Wochenenden, Feiertage (BW/CH), Halbtage inkl. Sonderfälle, **Teilzeit**, **anteiliger Anspruch (Ein-/Austritt)**, **Resturlaub-Verfall**, Resturlaub-Konto
 - [`src/domain/holidays.test.ts`](src/domain/holidays.test.ts) — algorithmische Feiertage (2025/2026/2027), BW vs. CH
