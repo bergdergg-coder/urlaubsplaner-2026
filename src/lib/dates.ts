@@ -71,7 +71,11 @@ export function formatRangeDE(start: string, end: string): string {
 export const YEAR = 2026
 export const YEAR_START = iso(YEAR, 1, 1)
 export const YEAR_END = iso(YEAR, 12, 31)
-export const TODAY = iso(YEAR, 6, 15) // Planungs-Stichtag im Demo-Datenstand
+// „Heute" = tatsächliches Datum, auf das Planungsjahr begrenzt.
+export const TODAY = (() => {
+  const t = toISO(new Date())
+  return t < YEAR_START ? YEAR_START : t > YEAR_END ? YEAR_END : t
+})()
 
 /** Alle Tage des Planungsjahres. */
 export function yearDays(): string[] {

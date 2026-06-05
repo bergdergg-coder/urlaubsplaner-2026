@@ -32,10 +32,15 @@
   --color-info: #2563eb;
   --color-info-bg: #e6effe;
 
-  /* Gesellschaftsakzente (tonal, ruhig) */
-  --color-wgv: #ee1c25;
-  --color-ag: #2f6f8f;
-  --color-gmbh: #1f8a70;
+  /* Gesellschaftsakzente — Vorgabe Würzburger Gruppe:
+     WGV = Orange · Würzburger AG = Rot · Würzburger GmbH = Hellgrün.
+     Jeweils ein dunkler Ton (Linien/Text) und Flächenton ergänzt. */
+  --color-wgv: #e8740c;        /* Orange */
+  --color-wgv-soft: #fdeede;
+  --color-ag: #d62828;         /* Rot */
+  --color-ag-soft: #fbe4e4;
+  --color-gmbh: #6fae2f;       /* Hellgrün */
+  --color-gmbh-soft: #ecf6df;
 
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
     "Helvetica Neue", Arial, sans-serif;

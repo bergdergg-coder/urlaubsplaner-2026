@@ -17,7 +17,11 @@ export interface Company {
   country: Country    // Würzburger AG ist ein Schweizer Unternehmen, Rest DE
   location: string    // Standort
   holidayRegion: HolidayRegion
-  accent: string      // CSS-Farbe (tonaler Akzent)
+  accent: string      // CSS-Farbe (tonaler Akzent) — Firmenfarbe
+  /** Textfarbe auf der Firmenfarbe (Kontrast für farbige Kopfzeilen/Ausdrucke). */
+  accentText: string
+  /** dezenter Flächenton der Firmenfarbe (Hintergründe). */
+  accentSoft: string
   /** Engpass-Schwellen: ab wie vielen gleichzeitig Abwesenden gelb / rot. */
   thresholds: { yellow: number; red: number }
 }
@@ -28,6 +32,10 @@ export type RoleLevel =
   | 'company_manager'    // Freigaben + Sicht der eigenen Gesellschaft
   | 'group_management'   // gruppenweite Management-Sicht (Wolfgang)
   | 'admin'              // Konfiguration (Stammdaten, Regeln)
+
+/** Funktionsgruppe — für Rollen-/Gruppen-Filter in Exporten und Auswertungen.
+   (z. B. „nur Geschäftsführung & Kader nach Outlook exportieren".) */
+export type RoleGroup = 'management' | 'kader' | 'verwaltung' | 'mitarbeiter'
 
 export type Department =
   | 'Geschäftsführung'
@@ -43,10 +51,19 @@ export type Department =
 export interface Employee {
   id: string
   name: string
+  /** Eindeutige primäre Gesellschaft (Heimatfirma). Mehrfach-Sichtbarkeit
+     entsteht über die Rolle (Administrator sieht alle Gesellschaften). */
   companyId: CompanyId
   jobTitle: string
   department: Department
   role: RoleLevel
+  /** Teilzeit: Arbeitstage als Wochentage (Mo=0 … So=6). Fehlt/leer = Vollzeit
+     Mo–Fr. Bestimmt, welche Tage als Urlaub zählen und den anteiligen Anspruch. */
+  workdays?: number[]
+  /** Eintrittsdatum (ISO) — für anteiligen Jahresanspruch (unterjährig). */
+  entryDate?: string
+  /** Austrittsdatum (ISO) — für anteiligen Jahresanspruch (unterjährig). */
+  exitDate?: string
   /** Schlüsselrolle: Funktion, die nicht unbesetzt sein darf. */
   isKeyRole: boolean
   /** Geschäftsführungs-/Leitungsebene (für gruppenweite Abstimmung). */

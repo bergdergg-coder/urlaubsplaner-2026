@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
-import type { Country, Employee } from '../../domain/types'
+import logoUrl from '../../assets/logo.png'
+import type { AbsenceStatus, Company, Country, Employee } from '../../domain/types'
 
 /* ---- Avatar --------------------------------------------------------------- */
 export function Avatar({ e, size = 34 }: { e: Employee; size?: number }) {
@@ -94,7 +95,7 @@ export function Modal({ open, onClose, title, children, width = 560 }: {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 bg-[rgba(20,20,24,0.42)] backdrop-blur-[2px] anim-fade"
       onClick={onClose}>
-      <div className="card anim-pop w-full mt-[6vh]" style={{ maxWidth: width, boxShadow: 'var(--shadow-pop)' }}
+      <div className="card anim-pop w-full mt-[6vh] max-h-[88vh] overflow-y-auto" style={{ maxWidth: width, boxShadow: 'var(--shadow-pop)' }}
         onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-line)]">
           <h3 id="modal-title" className="text-[15px] font-semibold">{title}</h3>
@@ -109,11 +110,48 @@ export function Modal({ open, onClose, title, children, width = 560 }: {
 }
 
 /* ---- Brand wave (modernisierter weißer Wellenbogen) ----------------------- */
-export function BrandWave({ className = '', color = 'var(--color-canvas)', flip = false }: { className?: string; color?: string; flip?: boolean }) {
+export function BrandWave({ className = '', color = 'var(--color-canvas)' }: { className?: string; color?: string }) {
   return (
-    <svg className={className} viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden
-      style={{ transform: flip ? 'scaleY(-1)' : undefined }}>
+    <svg className={className} viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden>
       <path d="M0,64 C320,120 520,8 760,40 C1000,72 1180,128 1440,72 L1440,120 L0,120 Z" fill={color} />
     </svg>
+  )
+}
+
+/* ---- Status-Badge (Antragsstatus) ----------------------------------------- */
+const STATUS_STYLE: Record<AbsenceStatus, { label: string; bg: string; fg: string }> = {
+  requested: { label: 'Beantragt', bg: 'var(--color-warn-bg)', fg: 'var(--color-warn)' },
+  approved: { label: 'Genehmigt', bg: 'var(--color-ok-bg)', fg: 'var(--color-ok)' },
+  rejected: { label: 'Abgelehnt', bg: 'var(--color-crit-bg)', fg: 'var(--color-crit)' },
+}
+export function StatusBadge({ status }: { status: AbsenceStatus }) {
+  const s = STATUS_STYLE[status]
+  return (
+    <span className="inline-flex items-center text-[11.5px] font-semibold px-2 py-0.5 rounded-full"
+      style={{ background: s.bg, color: s.fg }}>{s.label}</span>
+  )
+}
+
+/* ---- Druckkopf — Logo + „Würzburger Gruppe" + Firmenfarbe ------------------
+   Erscheint nur im Ausdruck/PDF (hidden auf dem Bildschirm). Oben links das
+   Logo, daneben „Würzburger Gruppe", farbiger Balken in der Firmenfarbe. */
+export function PrintHeader({ title, sub, company }: { title: string; sub?: string; company?: Company }) {
+  const accent = company?.accent ?? 'var(--color-ww-red)'
+  const printedOn = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
+  return (
+    <div className="hidden print:block mb-3">
+      <div className="flex items-center gap-3 pb-2.5" style={{ borderBottom: `3px solid ${accent}` }}>
+        <img src={logoUrl} alt="Würzburger Gruppe" className="h-11 w-auto" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[16px] font-bold leading-tight">Würzburger Gruppe</div>
+          <div className="text-[13px] text-[var(--color-ink-soft)] leading-tight">{title}{sub ? ` · ${sub}` : ''}</div>
+        </div>
+        {company && (
+          <span className="text-[12px] font-bold px-2.5 py-1 rounded"
+            style={{ background: company.accent, color: company.accentText }}>{company.name}</span>
+        )}
+      </div>
+      <div className="text-[10.5px] text-[var(--color-muted)] mt-1">Stand: {printedOn} · Urlaubsplanung 2026</div>
+    </div>
   )
 }

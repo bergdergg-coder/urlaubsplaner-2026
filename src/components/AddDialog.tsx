@@ -3,17 +3,25 @@ import { Trash2 } from 'lucide-react'
 import { Avatar, Modal, CountryFlag } from './ui/ui'
 import { COMPANIES, COMPANY_MAP } from '../domain/seed'
 import { useData } from '../store/data'
+import { useAuth } from '../store/auth'
 import { YEAR_START, YEAR_END, formatRangeDE } from '../lib/dates'
+import { leaveAccount, regionOf, workdaysInRange, workdaysOf } from '../lib/leave'
 
-export interface Draft { id?: string; employeeId: string; start: string; end: string; halfDay?: boolean }
+export interface Draft { id?: string; employeeId: string; start: string; end: string; halfDay?: boolean; status?: 'requested' | 'approved'; note?: string }
 
 export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => void }) {
-  const { employees, employeeMap, addAbsence, updateAbsence, removeAbsence } = useData()
+  const { employees, employeeMap, absences, addAbsence, updateAbsence, removeAbsence } = useData()
+  const { scopeCompanies, isManager, isEmployee, selfEmployeeId } = useAuth()
   const isEdit = !!draft.id
-  const [employeeId, setEmployeeId] = useState(draft.employeeId)
+  // Mitarbeiter im Self-Service: immer die eigene Person, kein Genehmigen.
+  const [employeeId, setEmployeeId] = useState(isEmployee && selfEmployeeId ? selfEmployeeId : draft.employeeId)
   const [start, setStart] = useState(draft.start)
   const [end, setEnd] = useState(draft.end)
   const [halfDay, setHalfDay] = useState(!!draft.halfDay)
+  const [note, setNote] = useState(draft.note ?? '')
+  const [status, setStatus] = useState<'approved' | 'requested'>(
+    isEmployee ? 'requested' : (draft.status ?? 'approved'),
+  )
 
   const e = employeeMap[employeeId]
   if (!e) return null
@@ -23,29 +31,42 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
   const lo = clamp(start <= end ? start : end)
   const hi = halfDay ? lo : clamp(end >= start ? end : start)
 
+  // Tatsächliche Urlaubstage dieser Eingabe (ohne arbeitsfreie Tage & Feiertage,
+  // gemäß dem individuellen Arbeitstagsmuster der Person).
+  const days = workdaysInRange(lo, hi, regionOf(e), halfDay, workdaysOf(e))
+  const acct = leaveAccount(e, absences)
+  // Verbleibend nach diesem Eintrag (Bearbeiten: grobe Vorschau auf Basis Rest).
+  const projectedRemaining = acct.remaining - (isEdit ? 0 : days)
+
   function save() {
-    const payload = { employeeId, start: lo, end: hi, halfDayStart: halfDay }
+    const payload = { employeeId, start: lo, end: hi, halfDayStart: halfDay, status, note }
     if (isEdit && draft.id) updateAbsence(draft.id, payload)
     else addAbsence(payload)
     onClose()
   }
 
+  const title = isEdit ? 'Urlaub bearbeiten' : (isEmployee ? 'Urlaub beantragen' : 'Urlaub eintragen')
+
   return (
-    <Modal open onClose={onClose} title={isEdit ? 'Urlaub bearbeiten' : 'Urlaub eintragen'} width={500}>
+    <Modal open onClose={onClose} title={title} width={500}>
       <div className="space-y-4">
         <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-[var(--color-canvas)]">
           <Avatar e={e} size={36} />
           <div className="flex-1 min-w-0">
-            <select aria-label="Mitarbeiter" value={employeeId} onChange={(ev) => setEmployeeId(ev.target.value)}
-              className="w-full bg-transparent text-[14px] font-semibold focusable rounded cursor-pointer">
-              {COMPANIES.map((co) => (
-                <optgroup key={co.id} label={co.name}>
-                  {employees.filter((x) => x.companyId === co.id).map((x) => (
-                    <option key={x.id} value={x.id}>{x.name}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            {isEmployee ? (
+              <div className="text-[14px] font-semibold">{e.name}</div>
+            ) : (
+              <select aria-label="Mitarbeiter" value={employeeId} onChange={(ev) => setEmployeeId(ev.target.value)}
+                className="w-full bg-transparent text-[14px] font-semibold focusable rounded cursor-pointer">
+                {COMPANIES.filter((co) => scopeCompanies.includes(co.id)).map((co) => (
+                  <optgroup key={co.id} label={co.name}>
+                    {employees.filter((x) => x.companyId === co.id).map((x) => (
+                      <option key={x.id} value={x.id}>{x.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            )}
             <div className="text-[12px] text-[var(--color-muted)] flex items-center gap-1">
               {c.name} <CountryFlag country={c.country} />
             </div>
@@ -55,24 +76,52 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
         <div className={`grid gap-3 ${halfDay ? 'grid-cols-1' : 'grid-cols-2'}`}>
           <div>
             <label htmlFor="leave-start" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">{halfDay ? 'Tag' : 'Von'}</label>
-            <input id="leave-start" type="date" className={field} value={start} min={YEAR_START} max={YEAR_END} onChange={(ev) => setStart(ev.target.value)} />
+            <input id="leave-start" type="date" autoFocus className={field} value={start} min={YEAR_START} max={YEAR_END} onChange={(ev) => setStart(clamp(ev.target.value))} />
           </div>
           {!halfDay && (
             <div>
               <label htmlFor="leave-end" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Bis</label>
-              <input id="leave-end" type="date" className={field} value={end} min={YEAR_START} max={YEAR_END} onChange={(ev) => setEnd(ev.target.value)} />
+              <input id="leave-end" type="date" className={field} value={end} min={start} max={YEAR_END} onChange={(ev) => setEnd(clamp(ev.target.value))} />
             </div>
           )}
         </div>
 
         <label className="flex items-center gap-2.5 text-[13px] text-[var(--color-ink-soft)] cursor-pointer select-none">
           <input type="checkbox" checked={halfDay} onChange={(ev) => setHalfDay(ev.target.checked)} className="w-4 h-4 accent-[var(--color-ww-red)]" />
-          ½ Tag (nur halber Tag)
+          ½ Tag
         </label>
 
-        <div className="text-[12.5px] text-[var(--color-muted)] bg-[var(--color-canvas)] rounded-lg px-3 py-2">
-          {halfDay ? `${formatRangeDE(lo, lo)} · ½ Tag` : formatRangeDE(lo, hi)}
+        <div>
+          <label htmlFor="leave-note" className="block text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Kommentar <span className="text-[var(--color-faint)] font-normal">(optional)</span></label>
+          <textarea id="leave-note" rows={2} value={note} onChange={(ev) => setNote(ev.target.value)}
+            placeholder={isEmployee ? 'z. B. Familienurlaub, Begründung …' : 'interne Notiz zum Eintrag …'}
+            className="w-full px-3 py-2 rounded-lg border border-[var(--color-line)] bg-white text-[14px] focusable resize-none" />
         </div>
+
+        {/* Direkt genehmigen nur für Verwalter; Mitarbeiter stellen immer Anträge. */}
+        {isManager && (
+          <div>
+            <div className="text-[12.5px] font-medium text-[var(--color-ink-soft)] mb-1.5">Art</div>
+            <div className="inline-flex p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)]">
+              {([['approved', 'Direkt genehmigt'], ['requested', 'Als Antrag']] as const).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setStatus(v)} aria-pressed={status === v}
+                  className={`focusable px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors ${status === v ? 'bg-white shadow-sm text-[var(--color-ink)]' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'}`}>{l}</button>
+              ))}
+            </div>
+            {status === 'requested' && <p className="text-[11.5px] text-[var(--color-muted)] mt-1.5">Erscheint unter „Freigaben" und zählt erst nach Genehmigung als Urlaub.</p>}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2 text-[12.5px] bg-[var(--color-canvas)] rounded-lg px-3 py-2">
+          <span className="text-[var(--color-muted)]">{halfDay ? `${formatRangeDE(lo, lo)} · ½ Tag` : formatRangeDE(lo, hi)}</span>
+          <span className="tnum font-semibold text-[var(--color-ink)]">{days} Urlaubstag{days === 1 ? '' : 'e'}</span>
+        </div>
+        {!isEdit && (
+          <div className="text-[11.5px] text-[var(--color-muted)] -mt-2 px-1">
+            Resturlaub {e.name.split(' ')[0]}: {acct.remaining} → <span className={projectedRemaining < 0 ? 'text-[var(--color-crit)] font-semibold' : 'font-semibold text-[var(--color-ink-soft)]'}>{projectedRemaining}</span> Tage
+            {acct.requested > 0 ? ` · ${acct.requested} bereits beantragt` : ''}
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-2 pt-1">
           <div>
@@ -87,7 +136,7 @@ export function AddDialog({ draft, onClose }: { draft: Draft; onClose: () => voi
             <button onClick={onClose} className="focusable h-10 px-4 rounded-lg text-[13px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-line-soft)]">Abbrechen</button>
             <button onClick={save} disabled={!start || (!halfDay && !end)}
               className="focusable h-10 px-5 rounded-lg bg-[var(--color-ww-red)] text-white text-[13px] font-semibold hover:bg-[var(--color-ww-red-600)] disabled:opacity-40 disabled:cursor-not-allowed">
-              {isEdit ? 'Speichern' : 'Eintragen'}
+              {isEdit ? 'Speichern' : (status === 'requested' ? 'Antrag stellen' : 'Eintragen')}
             </button>
           </div>
         </div>

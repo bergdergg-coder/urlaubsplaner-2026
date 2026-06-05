@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { ChevronLeft, ChevronRight, Printer, X } from 'lucide-react'
-import { CountryFlag } from '../components/ui/ui'
+import { ChevronLeft, ChevronRight, Printer, X, CalendarPlus } from 'lucide-react'
+import { CountryFlag, PrintHeader } from '../components/ui/ui'
+import { OutlookExportDialog } from '../components/OutlookExportDialog'
 import type { Absence, CompanyId } from '../domain/types'
 import { COMPANIES } from '../domain/seed'
 import { useData } from '../store/data'
-import { takenFor } from '../lib/leave'
+import { useAuth } from '../store/auth'
+import { leaveAccount } from '../lib/leave'
+import { downloadText } from '../lib/csv'
+import { outlookIcs } from '../lib/ics'
+import { loadExported, saveExported, vacationSig, vacationsOf, newVacations as pickNew } from '../lib/outlookExport'
 import { TYPE_COLOR } from '../lib/labels'
 import { holidayFor } from '../domain/holidays'
 import {
@@ -26,9 +31,12 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
   filter: CompanyId | 'ALL'
   setFilter: (f: CompanyId | 'ALL') => void
 }) {
-  const { employees, absences, removeAbsence } = useData()
+  const { employees, absences, removeAbsence, employeeMap } = useData()
+  const { scopeCompanies, isSuper } = useAuth()
   const cardRef = useRef<HTMLDivElement>(null)
   const [printReq, setPrintReq] = useState(false)
+  const [outlookOpen, setOutlookOpen] = useState(false)
+  const [exported, setExported] = useState<Set<string>>(() => loadExported())
 
   const cell = mode === 'month' ? 26 : 10
   const visibleDays = useMemo(() => {
@@ -39,12 +47,16 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
   const firstDay = visibleDays[0], lastDay = visibleDays[visibleDays.length - 1]
   const W = visibleDays.length * cell
   const dayIndex = useMemo(() => new Map(visibleDays.map((d, i) => [d, i])), [visibleDays])
+  const todayIdx = dayIndex.get(TODAY) ?? -1
 
-  const visibleCompanies = COMPANIES.filter((c) => filter === 'ALL' || c.id === filter)
+  const inScope = COMPANIES.filter((c) => scopeCompanies.includes(c.id))
+  const effFilter = isSuper ? filter : 'ALL'
+  const visibleCompanies = effFilter === 'ALL' ? inScope : inScope.filter((c) => c.id === effFilter)
   const visibleEmpIds = useMemo(() => {
     const companyIds = new Set(visibleCompanies.map((c) => c.id))
     return new Set(employees.filter((e) => companyIds.has(e.companyId)).map((e) => e.id))
   }, [visibleCompanies, employees])
+  const todayCount = absences.filter((a) => a.status !== 'rejected' && visibleEmpIds.has(a.employeeId) && a.start <= TODAY && a.end >= TODAY).length
   const awayCount = useMemo(() => visibleDays.map((d) =>
     absences.filter((a) => a.status !== 'rejected' && visibleEmpIds.has(a.employeeId) && a.start <= d && a.end >= d).length), [visibleDays, absences, visibleEmpIds])
 
@@ -58,16 +70,47 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
     .filter(({ d }) => d.endsWith('-01'))
     .map(({ d, i }) => ({ label: MONTHS_SHORT_DE[parseInt(d.slice(5, 7)) - 1], left: i * cell })), [visibleDays, cell])
 
-  // Druck: erst Filter/Modus anwenden, dann drucken
+  // Druck: erst Filter anwenden, dann drucken (Modus bleibt wie angezeigt — WYSIWYG).
   useEffect(() => {
     if (!printReq) return
     printElement(cardRef.current)
     setPrintReq(false)
   }, [printReq])
-  function printCompany(cid: CompanyId) { setMode('month'); setFilter(cid); setPrintReq(true) }
-  function printAll() { setMode('month'); setPrintReq(true) }
+  function printCompany(cid: CompanyId) { setFilter(cid); setPrintReq(true) }
+  function printAll() { setPrintReq(true) }
 
-  const todayCount = absences.filter((a) => a.status !== 'rejected' && a.start <= TODAY && a.end >= TODAY).length
+  // „Neue Urlaube"-Badge bezieht sich auf den GESAMTEN erlaubten Export-Bereich
+  // (Scope), nicht nur auf die aktuelle Filteransicht — passend zum Export-Dialog.
+  const scopeEmpIds = useMemo(() => {
+    const ids = new Set<CompanyId>(scopeCompanies)
+    return new Set(employees.filter((e) => ids.has(e.companyId)).map((e) => e.id))
+  }, [employees, scopeCompanies])
+  const scopeVacations = useMemo(
+    () => vacationsOf(absences, (a) => scopeEmpIds.has(a.employeeId)),
+    [absences, scopeEmpIds],
+  )
+  const pendingNew = useMemo(
+    () => pickNew(scopeVacations, exported, employeeMap),
+    [scopeVacations, exported, employeeMap],
+  )
+  const isExported = (a: Absence) => exported.has(vacationSig(a, employeeMap[a.employeeId]?.name ?? a.employeeId))
+
+  function markExported(list: Absence[]) {
+    const next = new Set(exported)
+    for (const a of list) next.add(vacationSig(a, employeeMap[a.employeeId]?.name ?? a.employeeId))
+    setExported(next)
+    saveExported(next)
+  }
+  function handleExport(list: Absence[], suffix: string) {
+    if (!list.length) return
+    downloadText(`Urlaub_WuerzburgerGruppe${suffix}_2026.ics`, outlookIcs(list, employeeMap, 'Urlaub Würzburger Gruppe 2026'), 'text/calendar;charset=utf-8')
+    markExported(list)
+  }
+  function resetExportLog() {
+    const empty = new Set<string>()
+    setExported(empty)
+    saveExported(empty)
+  }
 
   return (
     <div className="px-6 py-5">
@@ -77,7 +120,7 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
           <div className="flex items-center gap-3">
             <div className="inline-flex p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)]">
               {(['month', 'year'] as Mode[]).map((m) => (
-                <button key={m} onClick={() => setMode(m)}
+                <button key={m} onClick={() => setMode(m)} aria-pressed={mode === m}
                   className={`focusable px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors ${mode === m ? 'bg-white shadow-sm text-[var(--color-ink)]' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'}`}>
                   {m === 'month' ? 'Monat' : 'Jahr'}
                 </button>
@@ -101,12 +144,22 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
 
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-[12.5px] text-[var(--color-muted)]"><b className="tnum text-[var(--color-ink)]">{todayCount}</b> heute im Urlaub</span>
-            <div className="inline-flex p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)]">
-              {([['ALL', 'Alle'], ['WGV', 'WGV'], ['AG', 'AG 🇨🇭'], ['GMBH', 'GmbH']] as const).map(([v, l]) => (
-                <button key={v} onClick={() => setFilter(v)}
-                  className={`focusable px-2.5 py-1.5 text-[13px] font-medium rounded-md transition-colors ${filter === v ? 'bg-white shadow-sm text-[var(--color-ink)]' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'}`}>{l}</button>
-              ))}
-            </div>
+            {isSuper && (
+              <div className="inline-flex p-0.5 rounded-lg bg-[var(--color-line-soft)] border border-[var(--color-line)]">
+                {([['ALL', 'Alle'], ['WGV', 'WGV'], ['AG', 'AG 🇨🇭'], ['GMBH', 'GmbH']] as const).map(([v, l]) => (
+                  <button key={v} onClick={() => setFilter(v)} aria-pressed={filter === v}
+                    className={`focusable px-2.5 py-1.5 text-[13px] font-medium rounded-md transition-colors ${filter === v ? 'bg-white shadow-sm text-[var(--color-ink)]' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'}`}>{l}</button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setOutlookOpen(true)} title="Urlaube in den Outlook-Kalender übernehmen"
+              className="focusable relative inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--color-line)] text-[13px] font-medium hover:bg-[var(--color-line-soft)]">
+              <CalendarPlus size={15} /> Outlook
+              {pendingNew.length > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--color-ww-red)] text-white text-[11px] font-semibold tnum"
+                  title={`${pendingNew.length} neue Urlaube seit dem letzten Export`}>{pendingNew.length}</span>
+              )}
+            </button>
             <button onClick={printAll}
               className="focusable inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--color-line)] text-[13px] font-medium hover:bg-[var(--color-line-soft)]">
               <Printer size={15} /> Drucken
@@ -114,19 +167,31 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
           </div>
         </div>
 
-        {/* Titel nur für den Druck sichtbar */}
-        <div className="hidden print:block px-4 py-2 text-[14px] font-semibold">
-          Urlaubsplan 2026 · {mode === 'month' ? MONTHS_DE[month] : 'Gesamtjahr'}{filter !== 'ALL' ? ` · ${COMPANIES.find((c) => c.id === filter)!.name}` : ''}
+        {/* Markenkopf nur für den Druck/PDF sichtbar (Logo + Würzburger Gruppe + Firmenfarbe) */}
+        <div className="hidden print:block px-4 pt-3">
+          <PrintHeader
+            title={`Urlaubsplan · ${mode === 'month' ? `${MONTHS_DE[month]} 2026` : 'Gesamtjahr 2026'}`}
+            company={visibleCompanies.length === 1 ? visibleCompanies[0] : undefined} />
+        </div>
+
+        {/* Druck-Legende — erklärt Farben/Muster im Ausdruck (auch in S/W nachvollziehbar) */}
+        <div className="hidden print:flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-2 text-[10px] text-[var(--color-ink-soft)]">
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: TYPE_COLOR.vacation }} /> Urlaub (genehmigt)</span>
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm border-[1.5px] border-dashed bg-white" style={{ borderColor: 'var(--color-ww-red)' }} /> Antrag (offen)</span>
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-ww-red)' }} /> Feiertag</span>
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--color-canvas)', boxShadow: 'inset 0 0 0 1px var(--color-line)' }} /> Wochenende</span>
+          <span className="inline-flex items-center gap-1.5">Zahl rechts am Namen = Resturlaub (Tage)</span>
         </div>
 
         {/* Raster */}
         <div className="overflow-x-auto print-expand">
-          <div style={{ width: NAME_W + W }}>
+          <div className="relative" style={{ width: NAME_W + W }}>
             {/* Kopfzeile */}
             <div className="flex sticky top-16 z-20 bg-white border-b border-[var(--color-line)]">
-              <div className="shrink-0 sticky left-0 z-10 bg-white border-r border-[var(--color-line)] flex items-center px-4"
+              <div className="shrink-0 sticky left-0 z-10 bg-white border-r border-[var(--color-line)] flex items-center justify-between px-4"
                 style={{ width: NAME_W, height: mode === 'month' ? 40 : 30 }}>
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-faint)]">Mitarbeiter</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-faint)]" title="Resturlaub in Tagen">Rest</span>
               </div>
               {mode === 'month' ? (
                 <div className="flex" style={{ width: W }}>
@@ -172,14 +237,23 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                     <div style={{ width: W, height: 28 }} />
                   </div>
 
+                  {emps.length === 0 && (
+                    <div className="flex border-b border-[var(--color-line-soft)]">
+                      <div className="shrink-0 sticky left-0 z-10 bg-white border-r border-[var(--color-line)] flex items-center px-4" style={{ width: NAME_W, height: 30 }}>
+                        <span className="text-[12px] text-[var(--color-faint)] italic">Keine Mitarbeiter</span>
+                      </div>
+                      <div style={{ width: W, height: 30 }} />
+                    </div>
+                  )}
+
                   {emps.map((e) => {
                     const rows = absences.filter((a) => a.employeeId === e.id && a.status !== 'rejected' && a.start <= lastDay && a.end >= firstDay)
-                    const rem = e.entitlement + e.carryover - takenFor(e, absences)
+                    const rem = leaveAccount(e, absences).remaining
                     return (
                       <div key={e.id} className="flex border-b border-[var(--color-line-soft)] group">
                         <div className="shrink-0 sticky left-0 z-10 bg-white border-r border-[var(--color-line)] flex items-center justify-between gap-2 px-4 transition-colors group-hover:bg-[var(--color-line-soft)]/50" style={{ width: NAME_W, height: 30 }}>
                           <span className="text-[12.5px] font-medium truncate" title={e.name}>{e.name}</span>
-                          <span className="text-[11px] tnum text-[var(--color-faint)] shrink-0" title={`Resturlaub: ${rem} von ${e.entitlement + e.carryover} Tagen`}>{rem}</span>
+                          <span className="text-[11px] tnum shrink-0" style={{ color: rem < 0 ? 'var(--color-crit)' : 'var(--color-faint)' }} title={`Resturlaub: ${rem} von ${e.entitlement + e.carryover} Tagen`}>{rem}</span>
                         </div>
                         <div className="relative cursor-cell" style={{ width: W, height: 30, ...weekendStyle }}
                           onClick={(ev) => {
@@ -195,17 +269,20 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                             const en = a.end > lastDay ? lastDay : a.end
                             const si = dayIndex.get(s), ei = dayIndex.get(en)
                             if (si == null || ei == null) return null
-                            const w = (ei - si + 1) * cell - 2
+                            const singleHalf = si === ei && a.halfDayStart
+                            const w = singleHalf ? Math.max(8, Math.round(cell * 0.5)) : (ei - si + 1) * cell - 2
+                            const requested = a.status === 'requested'
                             return (
-                              <div key={a.id} title={`${e.name} · ${a.halfDayStart || a.halfDayEnd ? '½ Tag ' : ''}Urlaub\n${formatRangeDE(a.start, a.end)}\nKlick zum Bearbeiten`}
+                              <div key={a.id} title={`${e.name} · ${requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub')}\n${formatRangeDE(a.start, a.end)}\nKlick zum Bearbeiten`}
                                 onClick={(ev) => { ev.stopPropagation(); onEditAbsence(a) }}
                                 className="absolute rounded-[5px] flex items-center px-1.5 overflow-hidden cursor-pointer group/bar"
-                                style={{ left: si * cell + 1, width: w, top: 5, height: 20, background: TYPE_COLOR.vacation, color: 'white' }}>
-                                {w > 40 && <span className="text-[10.5px] font-medium truncate">{a.halfDayStart || a.halfDayEnd ? '½ ' : ''}Urlaub</span>}
-                                {w > 40 && (
-                                  <button onClick={(ev) => { ev.stopPropagation(); removeAbsence(a.id) }}
-                                    className="no-print ml-auto opacity-0 group-hover/bar:opacity-100 shrink-0 rounded p-0.5 transition-opacity hover:bg-black/20" title="Entfernen" aria-label="Urlaub entfernen"><X size={11} /></button>
-                                )}
+                                style={{ left: si * cell + 1, width: w, top: 5, height: 20,
+                                  background: requested ? 'color-mix(in srgb, var(--color-ww-red) 16%, white)' : TYPE_COLOR.vacation,
+                                  border: requested ? '1.5px dashed var(--color-ww-red)' : 'none',
+                                  color: requested ? 'var(--color-ww-red-700)' : 'white' }}>
+                                {w > 40 && <span className="text-[10.5px] font-medium truncate">{a.halfDayStart ? '½ ' : ''}{requested ? 'Antrag' : 'Urlaub'}</span>}
+                                <button onClick={(ev) => { ev.stopPropagation(); removeAbsence(a.id) }}
+                                  className="no-print ml-auto opacity-0 group-hover/bar:opacity-100 shrink-0 rounded p-0.5 transition-opacity hover:bg-black/20" title="Entfernen" aria-label="Urlaub entfernen"><X size={11} /></button>
                               </div>
                             )
                           })}
@@ -231,13 +308,31 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                 ))}
               </div>
             </div>
+
+            {/* „Heute"-Markierung */}
+            {todayIdx >= 0 && (
+              <div className="absolute top-0 bottom-0 pointer-events-none z-[6]" title="Heute"
+                style={{ left: NAME_W + todayIdx * cell + Math.floor(cell / 2) - 1, width: 2, background: 'var(--color-info)' }} />
+            )}
           </div>
         </div>
       </div>
 
       <p className="no-print text-[12px] text-[var(--color-faint)] mt-3 px-1">
-        In eine Zeile klicken zum Eintragen · auf einen Balken zeigen und ✕ zum Entfernen · 🖨 je Gesellschaft druckt diesen Bereich · Würzburger AG = Schweiz (eigene Feiertage).
+        In eine Zeile klicken zum Eintragen · auf einen Balken klicken zum Bearbeiten oder mit ✕ entfernen.
       </p>
+
+      <OutlookExportDialog
+        open={outlookOpen}
+        onClose={() => setOutlookOpen(false)}
+        employees={employees}
+        absences={absences}
+        allowedCompanies={scopeCompanies}
+        isExported={isExported}
+        exportedCount={exported.size}
+        onExport={handleExport}
+        onResetLog={resetExportLog}
+      />
     </div>
   )
 }
