@@ -6,7 +6,9 @@ import { roleGroupLabelOf } from '../domain/roles'
 import { useData } from '../store/data'
 import { useAuth } from '../store/auth'
 import { leaveAccount, absenceDays } from '../lib/leave'
-import { formatRangeDE, formatDE, WEEKDAYS_SHORT_DE } from '../lib/dates'
+import { formatRangeDE, formatDE, WEEKDAYS_SHORT_DE, MONTHS_SHORT_DE, yearDays, daysBetweenInclusive, iso, YEAR, YEAR_START, YEAR_END, TODAY } from '../lib/dates'
+import { holidayFor } from '../domain/holidays'
+import type { Absence } from '../domain/types'
 import { printElement } from '../lib/print'
 
 /* Urlaubsübersicht je Person — Resturlaubskonto + Antragsliste.
@@ -124,8 +126,20 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
           <Meter value={acct.approved} max={acct.available} color={c.accent} />
         </div>
 
+        {/* Genommener Urlaub im Jahresverlauf */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[14px] font-semibold flex items-center gap-1.5"><CalendarRange size={16} className="text-[var(--color-muted)]" /> Urlaub im Jahresverlauf {YEAR}</h3>
+            <div className="flex items-center gap-3 text-[11px] text-[var(--color-muted)]">
+              <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: c.accent }} /> genommen</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm border border-dashed bg-white" style={{ borderColor: c.accent }} /> Antrag</span>
+            </div>
+          </div>
+          <YearTaken absences={mine} color={c.accent} />
+        </div>
+
         {/* Antrags-/Urlaubsliste */}
-        <h3 className="text-[14px] font-semibold mb-2 flex items-center gap-1.5"><CalendarRange size={16} className="text-[var(--color-muted)]" /> Urlaube &amp; Anträge 2026</h3>
+        <h3 className="text-[14px] font-semibold mb-2 flex items-center gap-1.5"><CalendarRange size={16} className="text-[var(--color-muted)]" /> Urlaube &amp; Anträge {YEAR}</h3>
         {mine.length === 0 ? (
           <div className="text-[13px] text-[var(--color-muted)] py-4">Noch keine Urlaube oder Anträge erfasst.</div>
         ) : (
@@ -146,6 +160,45 @@ export function Uebersicht({ onNewLeave }: { onNewLeave: (employeeId: string) =>
             })}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+/* Kompakter Jahresverlauf: zeigt, WANN im Jahr Urlaub genommen wurde (in der
+   Firmenfarbe), mit Monatsrastern und Heute-Markierung. Anträge gestrichelt. */
+function YearTaken({ absences, color }: { absences: Absence[]; color: string }) {
+  const days = yearDays()
+  const total = days.length
+  const dayIdx = (d: string) => Math.max(0, Math.min(total - 1, daysBetweenInclusive(YEAR_START, d).length - 1))
+  const segs = absences
+    .filter((a) => a.type === 'vacation' && a.status !== 'rejected' && a.end >= YEAR_START && a.start <= YEAR_END)
+    .map((a) => {
+      const s = a.start < YEAR_START ? YEAR_START : a.start
+      const en = a.end > YEAR_END ? YEAR_END : a.end
+      const si = dayIdx(s), ei = dayIdx(en)
+      return { id: a.id, left: (si / total) * 100, width: ((ei - si + 1) / total) * 100, requested: a.status === 'requested', label: formatRangeDE(a.start, a.end) }
+    })
+  const months = Array.from({ length: 12 }, (_, m) => ({ label: MONTHS_SHORT_DE[m], left: (dayIdx(iso(YEAR, m + 1, 1)) / total) * 100 }))
+  const todayLeft = TODAY >= YEAR_START && TODAY <= YEAR_END ? (dayIdx(TODAY) / total) * 100 : -1
+  // Feiertagsmarkierungen (BW als Referenz) – dezente Punkte unter der Leiste.
+  const holiMarks = days.map((d, i) => ({ i, h: holidayFor(d, 'BW') })).filter((x) => x.h).map((x) => (x.i / total) * 100)
+  return (
+    <div>
+      <div className="relative h-3.5 mb-1 text-[9.5px] text-[var(--color-faint)]">
+        {months.map((m) => <span key={m.label} className="absolute leading-none" style={{ left: `${m.left}%` }}>{m.label}</span>)}
+      </div>
+      <div className="relative h-7 rounded-md bg-[var(--color-canvas)] border border-[var(--color-line)] overflow-hidden">
+        {months.map((m, i) => i === 0 ? null : <div key={m.label} className="absolute top-0 bottom-0 w-px bg-[var(--color-line)]" style={{ left: `${m.left}%` }} />)}
+        {holiMarks.map((l, i) => <div key={`h${i}`} className="absolute bottom-0 w-px h-1.5 bg-[var(--color-ww-red)]/40" style={{ left: `${l}%` }} />)}
+        {segs.length === 0 && <div className="absolute inset-0 flex items-center justify-center text-[11px] text-[var(--color-faint)]">Noch kein Urlaub erfasst</div>}
+        {segs.map((s) => (
+          <div key={s.id} title={s.label} className="absolute top-1.5 bottom-1.5 rounded-[3px]"
+            style={{ left: `${s.left}%`, width: `max(3px, ${s.width}%)`,
+              background: s.requested ? `color-mix(in srgb, ${color} 18%, white)` : color,
+              border: s.requested ? `1px dashed ${color}` : 'none' }} />
+        ))}
+        {todayLeft >= 0 && <div className="absolute top-0 bottom-0 w-px z-10" style={{ left: `${todayLeft}%`, background: 'var(--color-info)' }} title="Heute" />}
       </div>
     </div>
   )

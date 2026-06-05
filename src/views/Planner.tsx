@@ -10,7 +10,6 @@ import { leaveAccount } from '../lib/leave'
 import { downloadText } from '../lib/csv'
 import { outlookIcs } from '../lib/ics'
 import { loadExported, saveExported, vacationSig, vacationsOf, newVacations as pickNew } from '../lib/outlookExport'
-import { TYPE_COLOR } from '../lib/labels'
 import { holidayFor } from '../domain/holidays'
 import {
   MONTHS_DE, MONTHS_SHORT_DE, WEEKDAYS_SHORT_DE, iso, isWeekend, weekdayMon0, yearDays,
@@ -174,13 +173,17 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
             company={visibleCompanies.length === 1 ? visibleCompanies[0] : undefined} />
         </div>
 
-        {/* Druck-Legende — erklärt Farben/Muster im Ausdruck (auch in S/W nachvollziehbar) */}
+        {/* Druck-Legende — erklärt Farben/Muster im Ausdruck (auch in S/W nachvollziehbar).
+            Urlaub wird in der Firmenfarbe dargestellt. */}
         <div className="hidden print:flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-2 text-[10px] text-[var(--color-ink-soft)]">
-          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: TYPE_COLOR.vacation }} /> Urlaub (genehmigt)</span>
-          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm border-[1.5px] border-dashed bg-white" style={{ borderColor: 'var(--color-ww-red)' }} /> Antrag (offen)</span>
+          <span className="font-medium">Urlaub:</span>
+          {visibleCompanies.map((co) => (
+            <span key={co.id} className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: co.accent }} /> {co.name}</span>
+          ))}
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm border-[1.5px] border-dashed bg-white border-[var(--color-faint)]" /> Antrag (offen)</span>
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-ww-red)' }} /> Feiertag</span>
           <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3.5 h-2.5 rounded-sm" style={{ background: 'var(--color-canvas)', boxShadow: 'inset 0 0 0 1px var(--color-line)' }} /> Wochenende</span>
-          <span className="inline-flex items-center gap-1.5">Zahl rechts am Namen = Resturlaub (Tage)</span>
+          <span className="inline-flex items-center gap-1.5">Zahl rechts = Resturlaub</span>
         </div>
 
         {/* Raster */}
@@ -273,13 +276,13 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
                             const w = singleHalf ? Math.max(8, Math.round(cell * 0.5)) : (ei - si + 1) * cell - 2
                             const requested = a.status === 'requested'
                             return (
-                              <div key={a.id} title={`${e.name} · ${requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub')}\n${formatRangeDE(a.start, a.end)}\nKlick zum Bearbeiten`}
+                              <div key={a.id} title={`${e.name} · ${company.name} · ${requested ? 'Antrag (offen)' : (a.halfDayStart ? '½ Tag Urlaub' : 'Urlaub')}\n${formatRangeDE(a.start, a.end)}\nKlick zum Bearbeiten`}
                                 onClick={(ev) => { ev.stopPropagation(); onEditAbsence(a) }}
                                 className="absolute rounded-[5px] flex items-center px-1.5 overflow-hidden cursor-pointer group/bar"
                                 style={{ left: si * cell + 1, width: w, top: 5, height: 20,
-                                  background: requested ? 'color-mix(in srgb, var(--color-ww-red) 16%, white)' : TYPE_COLOR.vacation,
-                                  border: requested ? '1.5px dashed var(--color-ww-red)' : 'none',
-                                  color: requested ? 'var(--color-ww-red-700)' : 'white' }}>
+                                  background: requested ? `color-mix(in srgb, ${company.accent} 18%, white)` : company.accent,
+                                  border: requested ? `1.5px dashed ${company.accent}` : 'none',
+                                  color: requested ? `color-mix(in srgb, ${company.accent} 78%, black)` : company.accentText }}>
                                 {w > 40 && <span className="text-[10.5px] font-medium truncate">{a.halfDayStart ? '½ ' : ''}{requested ? 'Antrag' : 'Urlaub'}</span>}
                                 <button onClick={(ev) => { ev.stopPropagation(); removeAbsence(a.id) }}
                                   className="no-print ml-auto opacity-0 group-hover/bar:opacity-100 shrink-0 rounded p-0.5 transition-opacity hover:bg-black/20" title="Entfernen" aria-label="Urlaub entfernen"><X size={11} /></button>
