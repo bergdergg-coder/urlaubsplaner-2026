@@ -61,6 +61,7 @@ const BASE: AccountRecord[] = [
 
 const SESSION_KEY = 'ww-auth-v2'
 const ACCOUNTS_KEY = 'ww-auth-accounts-v1'
+const REMOVED_KEY = 'ww-auth-removed-base-v1'
 
 function loadCustomAccounts(): AccountRecord[] {
   try {
@@ -71,6 +72,14 @@ function loadCustomAccounts(): AccountRecord[] {
 }
 function saveCustomAccounts(list: AccountRecord[]): void {
   try { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list)) } catch { /* ignore */ }
+}
+// Gelöschte feste Demo-Zugänge (IDs) — damit auch sie dauerhaft entfernt bleiben.
+function loadRemovedBase(): string[] {
+  try {
+    const raw = localStorage.getItem(REMOVED_KEY)
+    const arr = raw ? (JSON.parse(raw) as string[]) : []
+    return Array.isArray(arr) ? arr : []
+  } catch { return [] }
 }
 
 const strip = ({ password, ...a }: AccountRecord): Account => { void password; return a }
@@ -99,7 +108,11 @@ interface AuthCtx {
   /** Zugangsverwaltung (nur sichtbar mit manageAccounts). */
   accounts: Account[]
   createAccount: (input: NewAccountInput) => { ok: boolean; error?: string }
-  removeAccount: (id: string) => void
+  removeAccount: (id: string) => { ok: boolean; error?: string }
+  /** Gelöschte feste Demo-Zugänge wiederherstellen. */
+  restoreRemovedAccounts: () => void
+  /** Anzahl der ausgeblendeten festen Demo-Zugänge. */
+  removedAccountCount: number
   loginOptions: { id: string; label: string; sub: string }[]
   login: (id: string, pw: string) => boolean
   logout: () => void
@@ -108,7 +121,11 @@ const Ctx = createContext<AuthCtx | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [custom, setCustom] = useState<AccountRecord[]>(loadCustomAccounts)
-  const records = useMemo<AccountRecord[]>(() => [...BASE, ...custom], [custom])
+  const [removedBase, setRemovedBase] = useState<string[]>(loadRemovedBase)
+  const records = useMemo<AccountRecord[]>(() => {
+    const removed = new Set(removedBase)
+    return [...BASE.filter((b) => !removed.has(b.id)), ...custom]
+  }, [custom, removedBase])
 
   const [account, setAccount] = useState<Account | null>(() => {
     try {
@@ -119,6 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   useEffect(() => { saveCustomAccounts(custom) }, [custom])
+  useEffect(() => {
+    try { localStorage.setItem(REMOVED_KEY, JSON.stringify(removedBase)) } catch { /* ignore */ }
+  }, [removedBase])
 
   const role: AccountRole | null = account?.role ?? null
   const perms = permsFor(role ?? 'employee')
@@ -168,7 +188,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCustom((prev) => [...prev, rec])
       return { ok: true }
     },
-    removeAccount: (id) => setCustom((prev) => prev.filter((a) => a.id !== id)),
+    removeAccount: (id) => {
+      if (!perms.manageAccounts) return { ok: false, error: 'Keine Berechtigung.' }
+      if (id === account?.id) return { ok: false, error: 'Der aktuell angemeldete Zugang kann nicht gelöscht werden.' }
+      const target = records.find((a) => a.id === id)
+      if (!target) return { ok: false, error: 'Zugang nicht gefunden.' }
+      // Firmenadministratoren: nur Zugänge der eigenen Gesellschaft, keine Admin-Zugänge.
+      if (!isAdmin && (target.role === 'admin' || !(target.companyId && scopeCompanies.includes(target.companyId)))) {
+        return { ok: false, error: 'Außerhalb des Zuständigkeitsbereichs.' }
+      }
+      // Mindestens ein Administrator-Zugang muss bestehen bleiben.
+      if (target.role === 'admin' && records.filter((a) => a.role === 'admin').length <= 1) {
+        return { ok: false, error: 'Der letzte Administrator-Zugang kann nicht gelöscht werden.' }
+      }
+      if (custom.some((c) => c.id === id)) setCustom((prev) => prev.filter((a) => a.id !== id))
+      else setRemovedBase((prev) => prev.includes(id) ? prev : [...prev, id])
+      return { ok: true }
+    },
+    restoreRemovedAccounts: () => setRemovedBase([]),
+    removedAccountCount: removedBase.length,
     loginOptions: records.map(({ id, label, sub }) => ({ id, label, sub })),
     login: (id, pw) => {
       const a = records.find((x) => x.id === id)

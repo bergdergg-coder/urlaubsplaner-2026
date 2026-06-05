@@ -243,17 +243,26 @@ function EmployeeDialog({ emp, scope, isSuper, onClose, onSave }: {
   )
 }
 
-/* ---- Zugangsverwaltung — Admins/Firmenadmins legen Logins an --------------- */
+/* ---- Zugangsverwaltung — Admins/Firmenadmins legen Logins an & löschen ----- */
 function AccountsCard() {
   const { employees } = useData()
-  const { accounts, createAccount, removeAccount, scopeCompanies, isAdmin } = useAuth()
+  const { accounts, account, createAccount, removeAccount, restoreRemovedAccounts, removedAccountCount, scopeCompanies, isAdmin } = useAuth()
   const [open, setOpen] = useState(false)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const inScopeAccounts = accounts.filter((a) =>
     isAdmin || (a.companyId && scopeCompanies.includes(a.companyId)))
+  const adminCount = accounts.filter((a) => a.role === 'admin').length
 
   const roleLabel: Record<AccountRole, string> = {
     admin: 'Administrator', company_manager: 'Firmenadministrator', employee: 'Mitarbeiter',
+  }
+
+  function doRemove(id: string) {
+    const res = removeAccount(id)
+    setConfirmId(null)
+    setError(res.ok ? null : res.error ?? 'Löschen nicht möglich.')
   }
 
   return (
@@ -265,22 +274,48 @@ function AccountsCard() {
           <Plus size={14} /> Zugang anlegen
         </button>
       </div>
+      {error && <div className="mx-5 mt-3 text-[12.5px] text-[var(--color-crit)] bg-[var(--color-crit-bg)] rounded-lg px-3 py-2">{error}</div>}
       <div className="divide-y divide-[var(--color-line-soft)]">
-        {inScopeAccounts.map((a) => (
-          <div key={a.id} className="px-5 py-2.5 flex items-center gap-3 text-[13px]">
-            <ShieldCheck size={16} className={a.role === 'admin' ? 'text-[var(--color-ww-red)]' : 'text-[var(--color-faint)]'} />
-            <div className="flex-1 min-w-0">
-              <div className="font-medium truncate">{a.label}</div>
-              <div className="text-[11.5px] text-[var(--color-muted)]">{a.sub}</div>
+        {inScopeAccounts.map((a) => {
+          const isActive = a.id === account?.id
+          const isLastAdmin = a.role === 'admin' && adminCount <= 1
+          const locked = isActive || isLastAdmin
+          return (
+            <div key={a.id} className="px-5 py-2.5 flex items-center gap-3 text-[13px]">
+              <ShieldCheck size={16} className={a.role === 'admin' ? 'text-[var(--color-ww-red)]' : 'text-[var(--color-faint)]'} />
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{a.label}</div>
+                <div className="text-[11.5px] text-[var(--color-muted)]">{a.sub}</div>
+              </div>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--color-line-soft)] text-[var(--color-ink-soft)]">{roleLabel[a.role]}</span>
+              {confirmId === a.id ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[12px] text-[var(--color-muted)]">Löschen?</span>
+                  <button onClick={() => doRemove(a.id)} aria-label="Löschen bestätigen"
+                    className="focusable p-1.5 rounded-lg bg-[var(--color-crit-bg)] text-[var(--color-crit)] hover:opacity-80"><Check size={15} /></button>
+                  <button onClick={() => setConfirmId(null)} aria-label="Abbrechen"
+                    className="focusable p-1.5 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-line-soft)]"><X size={15} /></button>
+                </div>
+              ) : locked ? (
+                <span className="text-[10.5px] text-[var(--color-faint)] px-1" title={isActive ? 'Aktuell angemeldet' : 'Letzter Administrator'}>
+                  {isActive ? 'aktiv' : 'letzter Admin'}
+                </span>
+              ) : (
+                <button onClick={() => { setError(null); setConfirmId(a.id) }} aria-label={`Zugang ${a.label} entfernen`}
+                  className="focusable p-1.5 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-crit-bg)] hover:text-[var(--color-crit)]"><Trash2 size={14} /></button>
+              )}
             </div>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--color-line-soft)] text-[var(--color-ink-soft)]">{roleLabel[a.role]}</span>
-            {a.custom ? (
-              <button onClick={() => removeAccount(a.id)} aria-label="Zugang entfernen"
-                className="focusable p-1.5 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-crit-bg)] hover:text-[var(--color-crit)]"><Trash2 size={14} /></button>
-            ) : <span className="text-[10.5px] text-[var(--color-faint)] px-1">fest</span>}
-          </div>
-        ))}
+          )
+        })}
       </div>
+      {isAdmin && removedAccountCount > 0 && (
+        <div className="px-5 py-2.5 border-t border-[var(--color-line-soft)]">
+          <button onClick={() => { restoreRemovedAccounts(); setError(null) }}
+            className="focusable text-[12px] text-[var(--color-muted)] hover:text-[var(--color-ink)] underline underline-offset-2">
+            {removedAccountCount === 1 ? '1 gelöschten Demo-Zugang' : `${removedAccountCount} gelöschte Demo-Zugänge`} wiederherstellen
+          </button>
+        </div>
+      )}
       {open && <NewAccountDialog employees={employees} scope={scopeCompanies} isAdmin={isAdmin}
         onClose={() => setOpen(false)} onCreate={createAccount} />}
     </Card>
