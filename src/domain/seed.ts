@@ -143,6 +143,19 @@ export const ABSENCES: Absence[] = [
   U('nadja-p', iso(2026, 7, 20), iso(2026, 7, 31)),
   U('nadja-p', iso(2026, 8, 14), iso(2026, 8, 14)),
 
+  // Würzburger AG — Carina & Jochen Schwandt (Geschäftsleitung), 2026
+  U('carina-s', iso(2026, 1, 22), iso(2026, 2, 6)),
+  U('jochen-s', iso(2026, 1, 22), iso(2026, 2, 6)),
+  U('carina-s', iso(2026, 3, 2), iso(2026, 3, 4), 'Hamburg'),
+  U('carina-s', iso(2026, 3, 26), iso(2026, 3, 30), 'Paris'),
+  U('jochen-s', iso(2026, 3, 26), iso(2026, 3, 30), 'Paris'),
+  U('carina-s', iso(2026, 4, 25), iso(2026, 5, 5)),
+  U('jochen-s', iso(2026, 4, 25), iso(2026, 5, 5)),
+  U('carina-s', iso(2026, 7, 9), iso(2026, 7, 10), 'Schweiz'),
+  U('jochen-s', iso(2026, 7, 9), iso(2026, 7, 10), 'Schweiz'),
+  U('carina-s', iso(2026, 7, 15), iso(2026, 7, 18), 'Spanien'),
+  U('jochen-s', iso(2026, 7, 15), iso(2026, 7, 18), 'Spanien'),
+
   // Würzburger GmbH — aus GmbH-Urlaubsliste 2026 (rot markierte Tage)
   U('bernd-w', iso(2026, 1, 2), iso(2026, 1, 2)),
   U('bernd-w', iso(2026, 2, 16), iso(2026, 3, 3)),
