@@ -200,8 +200,13 @@ export function Planner({ onCellClick, onEditAbsence, mode, setMode, month, setM
         <div className="overflow-x-auto print-expand">
           {/* print-fit + --print-scale: skaliert das (im Jahr sehr breite) Raster im Druck auf Seitenbreite. */}
           <div className="relative print-fit" style={{ width: NAME_W + W, ['--print-scale' as string]: String(Math.min(1, 1010 / (NAME_W + W))) } as CSSProperties}>
-            {/* Kopfzeile */}
-            <div className="flex sticky top-16 z-20 bg-white border-b border-[var(--color-line)]">
+            {/* Kopfzeile — top-0 (NICHT top-16): Der umgebende overflow-x-auto-Container
+                (.print-expand) ist zugleich der vertikale Sticky-Bezugsrahmen. Ein
+                top-Versatz schiebt die Kopfzeile dann um genau diesen Betrag nach unten —
+                direkt über die erste Mitarbeiterzeile (z. B. Wolfgang Würzburger über
+                Susanne), die dadurch am Bildschirm verdeckt wird (im Druck nicht, da
+                .sticky → static). Mit top-0 bleibt die erste Zeile sichtbar. */}
+            <div className="flex sticky top-0 z-20 bg-white border-b border-[var(--color-line)]">
               <div className="shrink-0 sticky left-0 z-10 bg-white border-r border-[var(--color-line)] flex items-center justify-between px-4"
                 style={{ width: NAME_W, height: mode === 'month' ? 40 : 30 }}>
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-faint)]">Mitarbeiter</span>
